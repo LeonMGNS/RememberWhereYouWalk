@@ -1,0 +1,1016 @@
+<mujoco model="go2">
+  <visual>
+    <headlight diffuse="0.35 0.35 0.35" ambient="0.45 0.45 0.45" specular="0.05 0.05 0.05"/>
+    <quality offsamples="8" shadowsize="4096"/>
+    <map shadowclip="1.0" shadowscale="0.6" znear="0.01"/>
+    <global offwidth="1920" offheight="1080"/>
+    <rgba haze="1 1 1 1"/>
+  </visual>
+  <compiler angle="radian" meshdir="assets" texturedir="assets" autolimits="true"/>
+
+  <option timestep="0.005" cone="pyramidal" impratio="1" iterations="1" ls_iterations="4">
+    <flag eulerdamp="disable" contact="enable" gravity="enable"/>
+  </option>
+
+  <default>
+    <geom solref="0.02 1" solimp="0.8 0.95 0.001" />
+    <default class="go2">
+      <geom friction="0.6" margin="0.001" condim="1"/>
+      <joint damping="0.05" axis="0 1 0"  armature="0.01" frictionloss="0.2"/>
+      <default class="abduction">
+        <joint axis="1 0 0" range="-1.0472 1.0472"/>
+      </default>
+      <default class="hip">
+        <default class="front_hip">
+          <joint range="-1.5708 3.4907"/>
+        </default>
+        <default class="back_hip">
+          <joint range="-0.5236 4.5379"/>
+        </default>
+      </default>
+      <default class="knee">
+        <joint range="-2.7227 -0.83776"/>
+      </default>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="go2foot">
+        <site group="1" pos="-0.002 0 -0.213"/>
+        <geom rgba="0.231373 0.380392 0.705882 1"/>
+      </default>
+      <default class="collision">
+        <geom group="3" contype="0" conaffinity="0"/>
+        <default class="foot">
+          <geom size="0.022" pos="-0.002 0 -0.213" priority="1" solimp="0.8 0.95 0.001" condim="6"
+            friction="0.6 0.02 0.01"/>
+        </default>
+      </default>
+    </default>
+  </default>
+
+  <custom>
+   <numeric data="20" name="max_contact_points"/>
+   <numeric data="20" name="max_geom_pairs"/>
+ </custom>
+  <asset>
+    <material name="metal" rgba=".9 .95 .95 1"/>
+    <material name="black" rgba="0 0 0 1"/>
+    <material name="white" rgba="1 1 1 1"/>
+    <material name="gray" rgba="0.671705 0.692426 0.774270 1"/>
+    <material name="goal_mat" rgba="0.008 0.62 0.451 1"/>
+
+    <texture name="texplane" type="2d" builtin="flat" rgb1=".8 .8 .8" width="100" height="100"/>
+
+    <texture name="maze_tex" type="2d" builtin="flat" rgb1="1 0 1"
+             width="100" height="100"/>
+    <material name="maze_mat" texture="maze_tex" texrepeat="1 1" texuniform="false"
+              specular="0.05" shininess="0.05" reflectance="0"/>
+
+    <material name="maze_flat" rgba="0.333 0.333 0.333 1" specular="0.05" shininess="0.05" reflectance="0"/>
+
+    <material name="MatPlane" reflectance="0.5" texture="texplane" texrepeat="1 1" texuniform="true"></material>
+    <mesh file="base_0.obj"/>
+    <mesh file="base_1.obj"/>
+    <mesh file="base_2.obj"/>
+    <mesh file="base_3.obj"/>
+    <mesh file="base_4.obj"/>
+    <mesh file="hip_0.obj"/>
+    <mesh file="hip_1.obj"/>
+    <mesh file="thigh_0.obj"/>
+    <mesh file="thigh_1.obj"/>
+    <mesh file="thigh_mirror_0.obj"/>
+    <mesh file="thigh_mirror_1.obj"/>
+    <mesh file="calf_0.obj"/>
+    <mesh file="calf_1.obj"/>
+    <mesh file="calf_mirror_0.obj"/>
+    <mesh file="calf_mirror_1.obj"/>
+    <mesh file="foot.obj"/>
+    <hfield name="empty_hfield" file="default_hfield_100x100.png" size="5 5 30 2"/>
+  </asset>
+
+  <worldbody>
+  <light pos="3 -3 6" dir="-0.5 0.5 -1" castshadow="true"
+       diffuse="0.55 0.55 0.55" specular="0.1 0.1 0.1" ambient="0.2 0.2 0.2"
+       directional="true"/>
+  <camera name="topdown" pos="0 0 8" xyaxes="0 1 0 -1 0 0" mode="fixed" fovy="10" projection="orthographic"/>
+  <camera name="plot_iso" pos="-6.5 -6.5 9" xyaxes="1 -1 0 0.6 0.6 1" mode="fixed" fovy="42"/>
+  <geom name="floor" pos="0 0 0" condim="3" material="maze_mat" size="100 100 0.125" rgba="0.8 0.8 0.8 1"  type="hfield" contype="1" hfield="empty_hfield"/>
+    <body name="base" pos="0 0 0.445" childclass="go2">
+
+      <inertial pos="0.021112 0 -0.005366" quat="-0.000543471 0.713435 -0.00173769 0.700719" mass="6.921"
+        diaginertia="0.107027 0.0980771 0.0244531"/>
+      <freejoint/>
+      <geom name="lidar" mesh="base_0" material="black" class="visual"/>
+      <geom mesh="base_1" material="black" class="visual"/>
+      <geom mesh="base_2" material="black" class="visual"/>
+      <geom mesh="base_3" material="white" class="visual"/>
+      <geom mesh="base_4" material="gray" class="visual"/>
+      <geom size="0.057 0.04675 0.057" class="collision"/>
+      <geom name="Front" size="0.05 0.045" pos="0.285 0 0.01" class="collision"/>
+      <geom name="Front-Lidar" size="0.047" pos="0.293 0 -0.06" class="collision"/>
+      <site name="imu" pos="-0.02557 0 0.04232"/>
+      <geom name="base_coll_geom"  type="capsule" size="0.075 0.1" pos="0 0 0" quat="0.7071068 0  0.7071068 0" class="collision"/>
+      <body name="FL_hip" pos="0.1934 0.0465 0">
+        <inertial pos="-0.0054 0.00194 -0.000105" quat="0.497014 0.499245 0.505462 0.498237" mass="0.678"
+          diaginertia="0.00088403 0.000596003 0.000479967"/>
+        <joint name="FL_hip_joint" class="abduction"/>
+        <geom mesh="hip_0" material="metal" class="visual"/>
+        <geom mesh="hip_1" material="gray" class="visual"/>
+        <geom name="FL_hip_geom" size="0.046 0.02" pos="0 0.08 0" quat="1 1 0 0" class="collision"/>
+        <body name="FL_thigh" pos="0 0.0955 0">
+          <inertial pos="-0.00374 -0.0223 -0.0327" quat="0.829533 0.0847635 -0.0200632 0.551623" mass="1.152"
+            diaginertia="0.00594973 0.00584149 0.000878787"/>
+          <joint name="FL_thigh_joint" class="front_hip"/>
+          <geom mesh="thigh_0" material="metal" class="visual"/>
+          <geom mesh="thigh_1" material="gray" class="visual"/>
+          <geom name="FL_thigh_geom" size="0.017 0.01225 0.017" pos="-0.015 0 -0.1955" quat="0.707107 0 0.707107 0" class="collision"/>
+          <body name="FL_calf" pos="0 0 -0.213">
+            <inertial pos="0.00629595 -0.000622121 -0.141417" quat="0.710672 0.00154099 -0.00450087 0.703508"
+              mass="0.241352" diaginertia="0.0014901 0.00146356 5.31397e-05"/>
+            <joint name="FL_calf_joint" class="knee"/>
+            <geom mesh="calf_0" material="gray" class="visual"/>
+            <geom mesh="calf_1" material="black" class="visual"/>
+            <geom name="FL_calf_geom_1" size="0.012 0.06" pos="0.008 0 -0.06" quat="0.994493 0 -0.104807 0" class="collision"/>
+            <geom name="FL_calf_geom_2" size="0.011 0.0325" pos="0.02 0 -0.148" quat="0.999688 0 0.0249974 0" class="collision"/>
+            <geom pos="0 0 -0.213" mesh="foot" class="visual" material="black"/>
+            <geom name="FL" class="foot"/>
+            <site name="FL_foot" class="go2foot"/>
+            <site name="FL_foot_force"/>
+          </body>
+        </body>
+      </body>
+      <body name="FR_hip" pos="0.1934 -0.0465 0">
+        <inertial pos="-0.0054 -0.00194 -0.000105" quat="0.498237 0.505462 0.499245 0.497014" mass="0.678"
+          diaginertia="0.00088403 0.000596003 0.000479967"/>
+        <joint name="FR_hip_joint" class="abduction"/>
+        <geom mesh="hip_0" material="metal" class="visual" quat="4.63268e-05 1 0 0"/>
+        <geom mesh="hip_1" material="gray" class="visual" quat="4.63268e-05 1 0 0"/>
+        <geom name="FR_hip_geom" size="0.046 0.02" pos="0 -0.08 0" quat="0.707107 0.707107 0 0" class="collision"/>
+        <body name="FR_thigh" pos="0 -0.0955 0">
+          <inertial pos="-0.00374 0.0223 -0.0327" quat="0.551623 -0.0200632 0.0847635 0.829533" mass="1.152"
+            diaginertia="0.00594973 0.00584149 0.000878787"/>
+          <joint name="FR_thigh_joint" class="front_hip"/>
+          <geom mesh="thigh_mirror_0" material="metal" class="visual"/>
+          <geom mesh="thigh_mirror_1" material="gray" class="visual"/>
+          <geom name="FR_thigh_geom" size="0.017 0.01225 0.017" pos="-0.015 0 -0.1955" quat="0.707107 0 0.707107 0" class="collision"/>
+          <body name="FR_calf" pos="0 0 -0.213">
+            <inertial pos="0.00629595 0.000622121 -0.141417" quat="0.703508 -0.00450087 0.00154099 0.710672"
+              mass="0.241352" diaginertia="0.0014901 0.00146356 5.31397e-05"/>
+            <joint name="FR_calf_joint" class="knee"/>
+            <geom mesh="calf_mirror_0" material="gray" class="visual"/>
+            <geom mesh="calf_mirror_1" material="black" class="visual"/>
+            <geom name="FR_calf_geom_1" size="0.013 0.06" pos="0.01 0 -0.06" quat="0.995004 0 -0.0998334 0" class="collision"/>
+            <geom name="FR_calf_geom_2" size="0.011 0.0325" pos="0.02 0 -0.148" quat="0.999688 0 0.0249974 0" class="collision"/>
+            <geom pos="0 0 -0.213" mesh="foot" class="visual" material="black"/>
+            <geom name="FR" class="foot"/>
+            <site name="FR_foot" class="go2foot"/>
+            <site name="FR_foot_force"/>
+          </body>
+        </body>
+      </body>
+      <body name="RL_hip" pos="-0.1934 0.0465 0">
+        <inertial pos="0.0054 0.00194 -0.000105" quat="0.505462 0.498237 0.497014 0.499245" mass="0.678"
+          diaginertia="0.00088403 0.000596003 0.000479967"/>
+        <joint name="RL_hip_joint" class="abduction"/>
+        <geom mesh="hip_0" material="metal" class="visual" quat="4.63268e-05 0 1 0"/>
+        <geom mesh="hip_1" material="gray" class="visual" quat="4.63268e-05 0 1 0"/>
+        <geom name = "RL_hip_geom" size="0.046 0.02" pos="0 0.08 0" quat="0.707107 0.707107 0 0" class="collision"/>
+        <body name="RL_thigh" pos="0 0.0955 0">
+          <inertial pos="-0.00374 -0.0223 -0.0327" quat="0.829533 0.0847635 -0.0200632 0.551623" mass="1.152"
+            diaginertia="0.00594973 0.00584149 0.000878787"/>
+          <joint name="RL_thigh_joint" class="back_hip"/>
+          <geom mesh="thigh_0" material="metal" class="visual"/>
+          <geom mesh="thigh_1" material="gray" class="visual"/>
+          <geom name = "RL_thigh_geom" size="0.017 0.01225 0.017" pos="-0.015 0 -0.1955" quat="0.707107 0 0.707107 0" class="collision"/>
+          <body name="RL_calf" pos="0 0 -0.213">
+            <inertial pos="0.00629595 -0.000622121 -0.141417" quat="0.710672 0.00154099 -0.00450087 0.703508"
+              mass="0.241352" diaginertia="0.0014901 0.00146356 5.31397e-05"/>
+            <joint name="RL_calf_joint" class="knee"/>
+            <geom mesh="calf_0" material="gray" class="visual"/>
+            <geom mesh="calf_1" material="black" class="visual"/>
+            <geom name="RL_calf_geom_1" size="0.013 0.06" pos="0.01 0 -0.06" quat="0.995004 0 -0.0998334 0" class="collision"/>
+            <geom name="RL_calf_geom_2" size="0.011 0.0325" pos="0.02 0 -0.148" quat="0.999688 0 0.0249974 0" class="collision"/>
+            <geom pos="0 0 -0.213" mesh="foot" class="visual" material="black"/>
+            <geom name="RL" class="foot"/>
+            <site name="RL_foot" class="go2foot"/>
+            <site name="RL_foot_force"/>
+          </body>
+        </body>
+      </body>
+      <body name="RR_hip" pos="-0.1934 -0.0465 0">
+        <inertial pos="0.0054 -0.00194 -0.000105" quat="0.499245 0.497014 0.498237 0.505462" mass="0.678"
+          diaginertia="0.00088403 0.000596003 0.000479967"/>
+        <joint name="RR_hip_joint" class="abduction"/>
+        <geom mesh="hip_0" material="metal" class="visual" quat="2.14617e-09 4.63268e-05 4.63268e-05 -1"/>
+        <geom mesh="hip_1" material="gray" class="visual" quat="2.14617e-09 4.63268e-05 4.63268e-05 -1"/>
+        <geom name="RR_hip_geom" size="0.046 0.02" pos="0 -0.08 0" quat="0.707107 0.707107 0 0" class="collision"/>
+        <body name="RR_thigh" pos="0 -0.0955 0">
+          <inertial pos="-0.00374 0.0223 -0.0327" quat="0.551623 -0.0200632 0.0847635 0.829533" mass="1.152"
+            diaginertia="0.00594973 0.00584149 0.000878787"/>
+          <joint name="RR_thigh_joint" class="back_hip"/>
+          <geom mesh="thigh_mirror_0" material="metal" class="visual"/>
+          <geom mesh="thigh_mirror_1" material="gray" class="visual"/>
+          <geom name="RR_thigh_geom" size="0.017 0.01225 0.017" pos="-0.015 0 -0.1955" quat="0.707107 0 0.707107 0" class="collision"/>
+          <body name="RR_calf" pos="0 0 -0.213">
+            <inertial pos="0.00629595 0.000622121 -0.141417" quat="0.703508 -0.00450087 0.00154099 0.710672"
+              mass="0.241352" diaginertia="0.0014901 0.00146356 5.31397e-05"/>
+            <joint name="RR_calf_joint" class="knee"/>
+            <geom mesh="calf_mirror_0" material="gray" class="visual"/>
+            <geom mesh="calf_mirror_1" material="black" class="visual"/>
+            <geom name="RR_calf_geom_1" size="0.013 0.06" pos="0.01 0 -0.06" quat="0.995004 0 -0.0998334 0" class="collision"/>
+            <geom name="RR_calf_geom_2" size="0.011 0.0325" pos="0.02 0 -0.148" quat="0.999688 0 0.0249974 0" class="collision"/>
+            <geom pos="0 0 -0.213" mesh="foot" class="visual" material="black"/>
+            <geom name="RR" class="foot"/>
+            <site name="RR_foot" class="go2foot"/>
+            <site name="RR_foot_force"/>
+          </body>
+        </body>
+      </body>
+    </body>
+    <geom name="goal_flag" type="sphere" size="0.2" pos="0 0 -10" material="goal_mat"/>
+  
+  <!-- Radial height-map visualization: 25 rays x 10 points, mocap-driven -->
+  <body name="hm_center" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0320" rgba="1 1 1 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_0" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_1" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_2" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_3" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_4" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_5" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_6" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_7" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_8" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_9" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_10" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_11" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_12" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_13" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_14" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_15" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_16" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_17" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_18" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_19" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_20" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_21" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_22" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_23" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_24" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_25" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_26" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_27" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_28" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_29" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_30" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_31" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_32" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_33" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_34" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_35" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_36" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_37" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_38" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_39" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_40" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_41" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_42" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_43" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_44" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_45" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_46" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_47" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_48" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_49" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_50" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_51" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_52" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_53" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_54" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_55" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_56" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_57" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_58" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_59" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_60" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_61" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_62" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_63" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_64" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_65" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_66" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_67" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_68" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_69" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_70" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_71" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_72" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_73" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_74" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_75" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_76" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_77" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_78" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_79" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_80" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_81" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_82" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_83" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_84" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_85" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_86" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_87" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_88" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_89" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_90" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_91" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_92" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_93" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_94" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_95" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_96" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_97" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_98" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_99" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_100" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_101" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_102" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_103" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_104" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_105" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_106" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_107" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_108" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_109" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_110" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_111" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_112" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_113" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_114" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_115" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_116" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_117" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_118" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_119" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_120" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_121" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_122" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_123" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_124" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_125" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_126" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_127" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_128" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_129" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_130" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_131" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_132" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_133" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_134" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_135" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_136" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_137" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_138" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_139" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_140" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_141" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_142" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_143" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_144" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_145" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_146" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_147" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_148" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_149" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_150" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_151" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_152" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_153" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_154" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_155" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_156" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_157" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_158" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_159" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_160" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_161" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_162" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_163" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_164" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_165" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_166" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_167" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_168" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_169" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_170" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_171" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_172" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_173" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_174" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_175" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_176" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_177" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_178" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_179" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_180" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_181" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_182" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_183" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_184" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_185" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_186" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_187" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_188" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_189" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_190" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_191" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_192" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_193" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_194" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_195" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_196" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_197" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_198" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_199" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_200" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_201" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_202" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_203" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_204" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_205" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_206" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_207" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_208" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_209" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_210" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_211" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_212" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_213" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_214" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_215" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_216" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_217" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_218" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_219" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_220" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_221" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_222" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_223" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_224" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_225" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_226" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_227" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_228" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_229" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_230" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_231" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_232" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_233" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_234" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_235" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_236" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_237" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_238" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_239" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_240" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.950 0.350 0.100 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_241" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.906 0.317 0.128 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_242" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.861 0.283 0.156 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_243" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.817 0.250 0.183 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_244" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.772 0.217 0.211 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_245" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.728 0.183 0.239 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_246" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.683 0.150 0.267 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_247" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.639 0.117 0.294 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_248" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.594 0.083 0.322 1" contype="0" conaffinity="0"/>
+  </body>
+  <body name="hm_point_249" mocap="true" pos="0 0 -10">
+    <geom type="sphere" size="0.0200" rgba="0.550 0.050 0.350 1" contype="0" conaffinity="0"/>
+  </body>
+  </worldbody>
+
+  <actuator>
+    <motor name="FR_hip" joint="FR_hip_joint" forcerange="-23.7 23.7"/>
+    <motor name="FR_thigh" joint="FR_thigh_joint" forcerange="-23.7 23.7"/>
+    <motor name="FR_calf" joint="FR_calf_joint" forcerange="-45.43 45.43"/>
+
+    <motor name="FL_hip" joint="FL_hip_joint"  forcerange="-23.7 23.7"/>
+    <motor name="FL_thigh" joint="FL_thigh_joint" forcerange="-23.7 23.7"/>
+    <motor name="FL_calf" joint="FL_calf_joint" forcerange="-45.43 45.43"/>
+
+    <motor name="RR_hip" joint="RR_hip_joint" forcerange="-23.7 23.7"/>
+    <motor name="RR_thigh" joint="RR_thigh_joint"  forcerange="-23.7 23.7"/>
+    <motor name="RR_calf" joint="RR_calf_joint" forcerange="-45.43 45.43"/>
+
+    <motor name="RL_hip" joint="RL_hip_joint" forcerange="-23.7 23.7"/>
+    <motor name="RL_thigh" joint="RL_thigh_joint" forcerange="-23.7 23.7"/>
+    <motor name="RL_calf" joint="RL_calf_joint" forcerange="-45.43 45.43"/>
+</actuator>
+
+  <keyframe>
+    <key name="home" qpos="0 0 0.325 1 0 0 0 0.1 0.8 -1.5 0.1 0.8 -1.5 0.1 1.0 -1.5 0.1 1.0 -1.5"/>
+  </keyframe>
+  <contact>
+    <pair geom1="RL" geom2="floor" friction="0.6 0.6 0.02 0.01 0.01"/>
+    <pair geom1="RR" geom2="floor" friction="0.6 0.6 0.02 0.01 0.01"/>
+    <pair geom1="FR" geom2="floor" friction="0.6 0.6 0.02 0.01 0.01"/>
+    <pair geom1="FL" geom2="floor" friction="0.6 0.6 0.02 0.01 0.01"/>
+  </contact>
+
+</mujoco>

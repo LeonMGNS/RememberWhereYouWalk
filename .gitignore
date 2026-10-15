@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Editors
+.vscode/
+.idea/
+*.code-workspace
+
+# Training outputs
+checkpoints/
+converged_checkpoints/
+deployment_checkpoints/
+policies/
+wandb/
+outputs/
+multirun/
+logs/
+*.log
+
+# Secrets
+wandb_login_key.txt
+.env
+
+# Large / generated artifacts
+*.mp4
+*.npy
+*.npz
+*.zip
+*.rrd
+
+# Maze data: ignore generated files, but track the training maze set
+*.pkl
+!data/mazes/maze_only_desc_300000.pkl

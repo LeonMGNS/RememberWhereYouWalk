@@ -1,0 +1,342 @@
+
+import jax
+import jax.numpy as jnp
+from rememberwalk.env.BaseMJXEnv import BaseMJXEnv
+from rememberwalk.states.MazeState import MazeState
+import optax
+from rememberwalk.actor_critic.MLP import ActorCritic,TrainingState,Transition,Params
+from rememberwalk.utils.script_utils import dir_path, generate_unique_path, get_dir_and_run_for_checkpointing
+import wandb
+import mujoco
+from mujoco import mjx
+from copy import deepcopy
+import orbax.checkpoint as ocp
+from flax import serialization
+import time
+import numpy as np
+
+class PPOTrainer:
+
+    def __init__(
+            self,
+            environment: BaseMJXEnv,
+            training_config:dict,
+            ckpt_dir:str,
+            run:str,
+            seed: int = 0,
+            ):
+
+        # Set parameters needed in trainer
+
+        #Training Parameters
+        self.environment = environment
+        self.training_config = training_config
+        self.training_steps = training_config["training_steps"]
+        self.debug = training_config["debug"]
+        self.batch_size = training_config["batch_size"]
+        self.actor_critic = training_config["actor_critic"]
+        self.nr_envs = training_config["nr_envs"]
+        self.optimizer =  training_config["optimizer"]
+        self.minibatch_size = training_config["minibatch_size"]
+        self.min_discount_factor = training_config["min_discount_factor"]
+        self.max_discount_factor = training_config["max_discount_factor"]
+        self.gae_lambda = training_config["gae_lambda"]
+        self.clipping_epsilon = training_config["clipping_epsilon"]
+        self.min_entropy_cost = training_config["min_entropy_cost"]
+        self.max_entropy_cost = training_config["max_entropy_cost"]
+        self.million_steps_per_logging = training_config["million_steps_per_logging"]
+        self.million_steps_per_model_save = training_config["million_steps_per_model_save"]/self.million_steps_per_logging
+        self.num_updates_per_batch =  training_config["num_updates_per_batch"]
+        self.kl_div_thr = training_config["kl_div_thr"]
+        self.loss_fn = training_config["loss_fn"]
+        self.transformer_mask = training_config["transformer_mask"]
+        self.collect_trajectories_fn = training_config["collect_trajectories_fn"]
+        self.initial_training_state = training_config["training_state"]
+        assert self.batch_size % self.minibatch_size == 0
+        assert self.batch_size % self.nr_envs == 0
+        self.unroll_length = self.batch_size // self.nr_envs
+        self.num_minibatches = self.batch_size // self.minibatch_size
+        self.num_epochs = self.training_steps // self.batch_size
+        self.num_training_steps_per_epoch = self.training_steps // self.num_epochs
+        self.num_training_steps_per_minibatch = self.num_training_steps_per_epoch // (self.num_minibatches*self.num_updates_per_batch)   
+        self.seed = seed
+
+        # Evalutaion parameters
+        self.evaluation_at_curriculum_steps = training_config["evaluation_at_curriculum_steps"]
+        self.nr_eval_envs = training_config["nr_eval_envs"]
+        self.deterministic_eval_callback = training_config["deterministic_eval_callback"]
+        self.probabilistic_eval_callback = training_config["probabilistic_eval_callback"]
+        self.eval_dict = training_config["eval_dict"]
+        self.use_deterministic_eval = training_config["use_deterministic_eval"]
+
+        # Init Objects needed in trainer
+        options = ocp.CheckpointManagerOptions(max_to_keep=2, create=True)
+        self.checkpointer = ocp.Checkpointer(ocp.PyTreeCheckpointHandler())
+        self.ckpt_dir, self.run = ckpt_dir,run
+        self.logging_dir = f"{dir_path}/logs/{self.run}"
+        self.checkpoint_manager = ocp.CheckpointManager(
+            self.ckpt_dir, self.checkpointer, options)
+        
+        #Converged checkpoint
+        self.secured_ckpt_dir = f"{self.ckpt_dir}_curr_complete"
+        secured_options = ocp.CheckpointManagerOptions(max_to_keep=None, create=True)
+        self.secured_checkpointer = ocp.Checkpointer(ocp.PyTreeCheckpointHandler())
+        self.secured_checkpoint_manager = ocp.CheckpointManager(
+            self.secured_ckpt_dir, self.secured_checkpointer, secured_options)
+        self._secured_ckpt_saved = False
+
+        if self.debug:
+            self.jitted_training_epoch = self.training_epoch
+            self.jitted_reset_function = self.environment.reset
+            if self.use_deterministic_eval:
+                self.evaluation_function = self.run_deterministic_evaluation
+            else:
+                self.evaluation_function = self.run_probablilistic_evaluation
+        else:
+            self.jitted_training_epoch = jax.jit(self.training_epoch, static_argnums=())
+            self.jitted_reset_function = jax.jit(self.environment.reset,static_argnums=())
+            if self.use_deterministic_eval:
+                self.evaluation_function = jax.jit(self.run_deterministic_evaluation,static_argnums=())
+            else:
+                self.evaluation_function = jax.jit(self.run_probablilistic_evaluation,static_argnums=())
+
+
+    def save_ckpt(self, state: TrainingState, step: int):
+        state_dict = serialization.to_state_dict(state)
+        self.checkpoint_manager.save(int(step), state_dict)
+
+    def save_secured_ckpt(self, state: TrainingState, step: int):
+        state_dict = serialization.to_state_dict(state)
+        self.secured_checkpoint_manager.save(int(step), state_dict)
+
+
+    def train(self,logger):
+        key = jax.random.PRNGKey(self.seed)
+
+        # Initialize training environment state
+        reset_keys = jax.random.split(key, self.nr_envs)
+        key, _ = jax.random.split(key)
+        env_state = jax.vmap(self.jitted_reset_function,(None,None,0))(self.environment.parameters["initial_curr_coeff"],self.environment.parameters["initial_terrain_curr_coeff"],reset_keys)
+
+        #Init additional metrics
+        # env_state.metrics["scale"] = jnp.zeros_like(env_state.metrics["reward"])
+        # env_state.metrics["auxiliary_reward"] = jnp.zeros_like(env_state.metrics["reward"])
+        # env_state.metrics["max_loc_error"] = jnp.zeros_like(env_state.metrics["reward"])
+        # env_state.metrics["avg_loc_error"] = jnp.zeros_like(env_state.metrics["reward"])
+        # env_state.metrics["use_pred_loc"] = env_state.use_pred_loc
+        # env_state.metrics["loc_log_distribution"] = jnp.zeros((self.nr_envs,self.actor_critic.di))
+       
+        #Init training loop carry
+        training_state = self.initial_training_state
+        carry = (env_state, training_state, key)
+        latest_logging_step = 0
+        
+        #Start training loop
+        carry, latest_logging_step = self.training_epoch_loop(carry, latest_logging_step,logger)
+        carry = (env_state, training_state, key)
+        self.save_ckpt(training_state, training_state.training_steps)
+        return carry[1]
+
+    def training_epoch_loop(self, carry, latest_logging_step,logger):
+        logging_counter = 0
+        env_state, training_state, key = carry
+        trained_steps = 0
+        next_eval_curriculum_counter = 0
+        eval_key = jax.random.PRNGKey(int(time.time()))
+        while trained_steps < self.training_steps:
+            env_state, training_state, key, optimize_metrics, training_metrics, summed_reward, episode_length = self.jitted_training_epoch(env_state, training_state, key)
+            trained_steps = float(training_state.training_steps)
+            print(f"Trained Steps: {trained_steps}")
+
+            # Secure the checkpoint once the curriculum is complete (all envs at 1.0).
+            if (not self._secured_ckpt_saved) and (float(jnp.mean(env_state.curr_coeff)) >= 1.0):
+                self.save_secured_ckpt(training_state, training_state.training_steps)  # persistent copy
+                self.save_ckpt(training_state, training_state.training_steps)          # alongside the rotating ones
+                self._secured_ckpt_saved = True
+                print(f"Secured curriculum-complete checkpoint at step {trained_steps}")
+
+
+            if ((trained_steps - latest_logging_step) >= (self.million_steps_per_logging*1e6)):
+                logging_counter += 1
+                latest_logging_step = float(training_state.training_steps)
+                training_metrics,eval_key = self.compute_training_metrics(training_metrics, summed_reward, episode_length,eval_key)
+                optimize_metrics = self.compute_optimize_metrics(optimize_metrics)
+                logger.log(training_metrics, step=int(training_state.training_steps))
+                logger.log(optimize_metrics, step=int(training_state.training_steps))
+                if (logging_counter % self.million_steps_per_model_save == 0):
+                    self.save_ckpt(training_state, training_state.training_steps)
+
+            if (next_eval_curriculum_counter < len(self.evaluation_at_curriculum_steps)) and (jnp.median(env_state.curr_coeff)>=self.evaluation_at_curriculum_steps[next_eval_curriculum_counter]):
+                eval_curr_coeff = self.evaluation_at_curriculum_steps[next_eval_curriculum_counter]
+                eval_terrain_curr_coeff = jnp.median(env_state.terrain_curr_coeff)
+                eval_reset_keys = jax.random.split(key, self.nr_eval_envs)
+                key, _ = jax.random.split(key)
+                eval_env_state = jax.vmap(self.jitted_reset_function,(None,None,0))(eval_curr_coeff,eval_terrain_curr_coeff,eval_reset_keys)
+                eval_dict = deepcopy(self.eval_dict)
+                eval_dict["state"] = eval_env_state
+                eval_dict["parameters"] = training_state.params
+                
+                eval_dict["action"] = jnp.zeros((self.nr_eval_envs,self.actor_critic.action_size))
+                if hasattr(self.actor_critic,"distribution_size"):
+                    eval_dict["predicted_distribution"] = jnp.zeros((self.nr_eval_envs,self.actor_critic.distribution_size))
+                    eval_dict["pred_delta_loc"]= jnp.zeros((self.nr_eval_envs,3))
+                if hasattr(self.actor_critic,"env_distribution_size"):    
+                    eval_dict["predicted_env_distribution"] =jnp.zeros((self.nr_eval_envs,self.actor_critic.env_distribution_size))
+                
+                eval_metrics,eval_episode_lengths,eval_summed_rewards = self.evaluation_function(eval_dict,key)         
+                evaluation_metrics = self.compute_evaluation_metrics(eval_metrics,eval_summed_rewards,eval_episode_lengths)
+                logger.log(evaluation_metrics, step=int(training_state.training_steps))
+                next_eval_curriculum_counter +=1
+        return (env_state, training_state, key), latest_logging_step
+
+    def training_epoch(self, env_state, training_state, key):
+        env_state,training_state ,key, transitions, training_metrics, summed_reward, episode_length = self.collect_trajectories_fn(self,env_state, training_state, key)
+        training_state, key, optimize_metrics = self.optimize(training_state, transitions, key)
+        return env_state, training_state, key, optimize_metrics, training_metrics, summed_reward, episode_length
+
+    def minibatch_sgd_step(self, carry, transitions):
+        training_state,kl_div_stop,key = carry
+        (loss,aux_data), grads = jax.value_and_grad(self.loss_fn, has_aux=True,argnums=1)(self,training_state.params, transitions,training_state.training_steps,key)
+        params_update, optimizer_state = self.optimizer.update(grads, training_state.optimizer_state,params=training_state.params)
+        params = optax.apply_updates(training_state.params, params_update)
+        new_training_state = training_state.replace(optimizer_state=optimizer_state, params=params)
+        new_training_state = new_training_state.replace(training_steps=training_state.training_steps + self.num_training_steps_per_minibatch)
+        loss_metrics = aux_data[0]
+        key = aux_data[1]
+        kl_div_stop = (jnp.abs(jnp.mean(loss_metrics["approx_kl_div"])) > self.kl_div_thr) | kl_div_stop
+        loss_metrics["kl_div_stop"] = kl_div_stop
+        training_state = jax.lax.cond(kl_div_stop, lambda: training_state, lambda: new_training_state)
+        return (training_state,kl_div_stop,key), loss_metrics
+    
+    def sgd_step(self, carry, _):
+        training_state, transitions,kl_div_stop,key = carry
+        (new_training_state,kl_div_stop,key), metrics = jax.lax.scan(
+            self.minibatch_sgd_step,
+            (training_state,kl_div_stop,key),
+            transitions,
+            length=self.num_minibatches,
+        )
+        return (new_training_state, transitions,kl_div_stop,key), metrics
+
+    def optimize(self, training_state: TrainingState, transitions: Transition, key):
+        def process_transitions(transitions):
+            transitions = jnp.swapaxes(transitions, 0, 1)
+            shuffled_transitions = jax.random.permutation(key, transitions,axis=0)
+            original_shape = shuffled_transitions.shape
+            # New shape: (num_minibatches, minibatch_size, unroll_length, features...)
+            new_shape = (self.num_minibatches, -1) + original_shape[1:]
+            shuffled_transitions = jnp.reshape(shuffled_transitions, new_shape)
+            return shuffled_transitions
+        processed_transitions = jax.tree_util.tree_map(process_transitions, transitions)
+        key, _ = jax.random.split(key)
+        kl_div_stop = False
+        carry = (training_state, processed_transitions,kl_div_stop,key)
+        carry, metrics = jax.lax.scan(self.sgd_step, carry, (), length=self.num_updates_per_batch)
+        new_training_state, transitions,kl_div_stop,key = carry
+        return new_training_state, key, metrics
+    
+    def run_deterministic_evaluation(self,eval_dict:dict,key):
+        # Initialize evaluation environment state
+        states_already_terminated = jnp.zeros((self.nr_eval_envs,),dtype=jnp.int32)
+        episode_lengths = jnp.zeros((self.nr_eval_envs,),dtype=jnp.int32)
+        summed_rewards = jnp.zeros((self.nr_eval_envs,),dtype=jnp.float32)
+        def eval_step(carry, _):
+            eval_dict,state_already_terminated,episode_length,summed_reward, key = carry
+            eval_dict,metrics = self.deterministic_eval_callback(self.actor_critic,eval_dict,self.environment)
+            state_keys=jax.random.split(key,self.nr_eval_envs)
+            next_state,state_keys = jax.vmap(self.environment.step)(eval_dict["state"],eval_dict["action"],state_keys)
+            eval_dict["state"] = next_state
+            episode_length = jnp.where(state_already_terminated,episode_length,next_state.n_steps)
+            masked_metrics = jax.tree_util.tree_map(
+                lambda metric: jnp.where(state_already_terminated,0.0, metric),
+                metrics
+            )
+            just_finished = ((eval_dict["state"].done | (eval_dict["state"].n_steps >= 3499)) & (~state_already_terminated.astype(jnp.bool_)))
+            summed_reward = jnp.where(just_finished, eval_dict["state"].summed_reward, summed_reward)
+            state_already_terminated = jnp.where(eval_dict["state"].done, jnp.ones_like(state_already_terminated), state_already_terminated)
+            return (eval_dict,state_already_terminated,episode_length,summed_reward,state_keys[-1]), masked_metrics
+        
+        (eval_dict,states_already_terminated,episode_lengths,summed_rewards,key), metrics = jax.lax.scan(eval_step, (eval_dict,states_already_terminated,episode_lengths,summed_rewards, key), None, length=self.environment.episode_length)
+        return metrics,episode_lengths,summed_rewards
+    def run_probablilistic_evaluation(self,parameters:Params,key:jnp.ndarray):
+        eval_reset_keys = jax.random.split(key, self.nr_eval_envs)
+        key, _ = jax.random.split(key)
+        eval_env_state = jax.vmap(self.jitted_reset_function)(eval_reset_keys)
+        eval_dict = self.eval_dict
+        eval_dict["state"] = eval_env_state
+        eval_dict["parameters"] = parameters
+        eval_dict["action"] = jnp.zeros((self.nr_eval_envs,self.actor_critic.action_size))
+        states_already_terminated = jnp.zeros((self.nr_eval_envs,),dtype=jnp.int32)
+        episode_lengths = jnp.zeros((self.nr_eval_envs,),dtype=jnp.int32)
+        summed_rewards = jnp.zeros((self.nr_eval_envs,),dtype=jnp.float32)
+        def eval_step(carry, _):
+            eval_dict,state_already_terminated,episode_length,summed_reward, key = carry
+            eval_dict,metrics,key = self.probabilistic_eval_callback(self.actor_critic,eval_dict,self.environment,key)
+            state_keys=jax.random.split(key,self.nr_eval_envs)
+            next_state,state_keys = jax.vmap(self.environment.step)(eval_dict["state"],eval_dict["action"],state_keys)
+            eval_dict["state"] = next_state
+            episode_length = jnp.where(state_already_terminated,episode_length,next_state.n_steps)
+            metrics.update(next_state.metrics)
+            masked_metrics = jax.tree_util.tree_map(
+                lambda metric: jnp.where(state_already_terminated, 0.0, metric),
+                metrics
+            )
+            just_finished = ((eval_dict["state"].done | (eval_dict["state"].n_steps >= 3499)) & (~state_already_terminated.astype(jnp.bool_)))
+            summed_reward = jnp.where(just_finished, eval_dict["state"].summed_reward, summed_reward)
+            state_already_terminated = jnp.where(eval_dict["state"].done, jnp.ones_like(state_already_terminated), state_already_terminated)
+            return (eval_dict,state_already_terminated,episode_length,summed_reward,state_keys[-1]), masked_metrics
+        (eval_dict,states_already_terminated,episode_lengths,summed_rewards,key), metrics = jax.lax.scan(eval_step, (eval_dict,states_already_terminated,episode_lengths,summed_rewards, key), None, length=self.environment.episode_length)
+        return metrics,episode_lengths,summed_rewards
+
+
+    def compute_training_metrics(self, metrics: dict, summed_reward, episode_length,eval_key):
+        result = {}
+        for key, value in metrics.items():
+            if key == "loc_log_distribution":
+                eval_key, subkey = jax.random.split(eval_key)
+                leading_shape = value.shape[:-1]
+                flat_idx = jax.random.randint(subkey, shape=(), minval=0, maxval=jnp.prod(jnp.array(leading_shape)))
+                single_distribution = jnp.exp(value.reshape(-1, value.shape[-1])[flat_idx])  # (dist_shape,)
+                img_shape = jnp.sqrt(single_distribution.shape[0]).astype(jnp.int32)
+                result[f"Rollout/{key}"] = wandb.Image(np.array(single_distribution.reshape((img_shape,img_shape))))
+            else:
+                mean_value = jnp.mean(value)
+                std_value = jnp.std(value)
+                result[f"Rollout/{key}_mean"] = mean_value
+                result[f"Rollout/{key}_std"] = std_value
+
+        summed_reward = jnp.nan_to_num(summed_reward, nan=0.0, posinf=0.0, neginf=0.0)
+        non_zero_summed_reward_idx = jnp.nonzero(summed_reward)
+        non_zero_episode_length_idx = jnp.nonzero(episode_length)
+        result["Rollout/summed_reward_mean"] = jnp.mean(summed_reward[non_zero_summed_reward_idx])
+        result["Rollout/episode_length_mean"] = jnp.mean(episode_length[non_zero_episode_length_idx])
+        result["Rollout/summed_reward_std"] = jnp.std(summed_reward[non_zero_summed_reward_idx])
+        result["Rollout/episode_length_std"] = jnp.std(episode_length[non_zero_episode_length_idx])
+        return result,eval_key
+    
+    def compute_evaluation_metrics(self, metrics: dict, summed_reward, episode_length):
+        step_indices = jnp.arange(self.environment.episode_length)[:, None]
+        mask = step_indices < episode_length
+        result = {}
+        for key, value in metrics.items():
+            mean_value = jnp.mean(value[mask])
+            std_value = jnp.std(value[mask])
+            result[f"Eval/{key}_mean"] = mean_value
+            result[f"Eval/{key}_std"] = std_value
+
+        summed_reward = jnp.nan_to_num(summed_reward, nan=0.0, posinf=0.0, neginf=0.0)
+        result["Eval/summed_reward_mean"] = jnp.mean(summed_reward)
+        result["Eval/episode_length_mean"] = jnp.mean(episode_length)
+        result["Eval/summed_reward_std"] = jnp.std(summed_reward)
+        result["Eval/episode_length_std"] = jnp.std(episode_length)
+        return result
+
+    def compute_optimize_metrics(self, metrics: dict):
+        result = {}
+        for key, value in metrics.items():
+            mean_value = jnp.mean(value)
+            std_value = jnp.std(value)
+            result[f"Optimization/{key}_mean"] = mean_value
+            result[f"Optimization/{key}_std"] = std_value
+        return result
+

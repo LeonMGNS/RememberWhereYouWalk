@@ -1,0 +1,359 @@
+run_name: "EvalLSTM_1"
+
+imports:
+  # Architecture imports
+  actor_critic: "actor_critic.LSTM.ActorCritic"
+  actor_critic_params: "actor_critic.LSTM.Params"
+  actor_critic_training_state: "actor_critic.LSTM.TrainingState"
+
+  # Environment imports
+  env: "env.SimpleMazeEnv.SimpleMazeEnv"
+  robot: "robots.GO2.GO2"
+  reset_fn: "reset.MazeResetFunction.reset_fn"
+  reset_variables_fn: "reset.MazeResetFunction.reset_variables"
+  done_fn: "done.SmallMazeDeploymentDoneFunction.get_done"
+  update_lasttouch_fn: "collision.HeightFieldCollisionFunction.update_lasttouch"
+  get_collision_lookup_fn: "collision.HeightFieldCollisionFunction.get_collision_lookup"
+  get_contact_fn: "collision.HeightFieldCollisionFunction.get_contact"
+  update_curriculum_fn: "curriculum.SmallMazeExponentialCurriculumFunction.update_curriculum"
+  randomize_state_action_fn: "randomization.DomainRandomizationFunction.randomize_state_action"
+  reset_randomize_state_fn: "randomization.DomainRandomizationFunction.reset_randomize_state"
+  reward_handler: "reward.MazeSmallRewardFunction.MazeReward"
+  terrain_obseravtion_hanlder: "observation.TerrainObservation.TerrainObs"
+  observation_fn: "observation.MazeDeploymentObservationFunctionGRHeightMap.get_obs"
+  terrain_handler: "terrain.MazeStaticTerrainGenerator.MazeStaticGenerator"
+  command_handler: "command.VanishingGoalPositionCommandCreator.StaticMazeCommandCreator"
+  control_handler: "control.ControlFunction.PDControl"
+
+  # Domain Randomization imports
+  observation_randomization_hanlder: "randomization.DomainRandomization.Observation_randomization.ObsDR"
+  init_state_randomization_handler: "randomization.DomainRandomization.Init_state_randomization.InitStateRandomization"
+  model_randomization_handler: "randomization.DomainRandomization.Model_randomization.ModelDR"
+  pertubation_randomization_handler: "randomization.DomainRandomization.Pertubation_Randomization.DefaultDomainPerturbation"
+  control_randomization_handler: "randomization.DomainRandomization.Control_randomization.DefaultDomainControl"
+  delay_action_handler: "randomization.DomainRandomization.Action_delay_randomization.DelayAction"
+  maze_cell_based_rand_handler: "randomization.DomainRandomization.MazeCellBasedRandomization.MazeCellDR"
+
+  # Training imports
+  loss_fn: "training.loss_functions.lstm_loss.loss_fn"
+  collect_trajectories_fn: "training.collect_trajectories_functions.collect_trajectories_lstm.collect_trajectories"
+  state: "states.MazeState.MazeState"
+
+  # Callback imports
+  visualizer_callback: "callback.MazeExplorationLSTMCallback.visualizer_callback"
+  deterministic_eval_callback: "callback.MazeExplorationLSTMCallback.deterministic_eval_callback"
+  probabilistic_eval_callback: "callback.MazeExplorationLSTMCallback.probabilistic_eval_callback"
+  experiment_callback: "callback.MazeExplorationLSTMCallback.experiment_callback"
+
+env:
+  actor_observation_size: 45
+  actor_output_size: 24
+  value_observation_size: 80
+  physics_steps_per_control_step: 4
+  episode_length: 3500
+  exploration_min: 1.0
+  exploration_max: 1.0
+  no_goal_pos_multiplier: 3.0
+  initial_no_goal_pos_probability: 0.0
+
+robot:
+  name: "GO2"
+  config: "mjx_navigation_plot"
+
+architecture:
+  min_scale: 0.025
+  max_scale: 2.0
+  memory:
+    lstm_hidden_size: 1000
+    lstm_memory_output_features: 75
+
+curriculum:
+  nr_curriculum_levels: 100
+  max_curriculum_value: 1.0
+  initial_curriculum_value: 0.0
+  max_terrain_curriculum_value: 1.0
+  initial_terrain_curr_coeff: 1.0
+  max_delta_curriculum_value: 0.05
+  max_allowed_loc_error: 0.65
+
+terrain:
+  maze_rows: 5
+  maze_cols: 5
+  space_maze_cell: 2.0
+  cell_visit_size_in_meters: 2.0
+  use_file_maze: true
+  cells_in_x: 100
+  cells_in_y: 100
+  wall_height: 0.5
+  wall_thickness: 2
+  length_in_x: 5
+  length_in_y: 5
+  max_possible_height: 30
+  terrain_curr_coeff_window_size: 0.15
+  height_field_resolution: 0.1
+  height_map_resolution: 0.1
+  height_map_grid_x_length: 1.4
+  height_map_grid_y_length: 1.4
+  critic_height_map_grid_x_length: 5.0
+  critic_height_map_grid_y_length: 5.0
+  critic_max_pool_window_size: 2
+  encoded_height_map_size: 75
+  terrain_roughness: 0.0
+  start_pos_noise: 0.0
+  proprioception:
+    randomization_prob: 0.15
+    proprio_values: 5
+    min_gravity: -15
+    max_gravity: -5
+    friction_min: 0.0
+    friction_tangential_max: 4.0
+    friction_rolling_max: 0.5
+    friction_torsional_max: 0.5
+    terrain_roughness_min: 0.0
+    terrain_roughness_max: 0.05
+
+reward:
+  z_velocity_coeff: 2.0
+  pitch_roll_vel_coeff: 0.05
+  pitch_roll_pos_coeff: 10.0
+  joint_position_limit_coeff: 40.0
+  joint_velocity_limit_coeff: 5.0
+  joint_velocity_coeff: 4e-4
+  joint_acceleration_coeff: 5e-6
+  joint_torque_coeff: 0.03
+  action_rate_coeff: 3.0
+  air_time_max: 0.3
+  soft_joint_position_limit: 0.9
+  air_time_coeff: 3.0
+  base_height_coeff: 30.0
+  symmetry_air_coeff: 0.5
+  tracking_xy_velocity_command: 0.0
+  tracking_yaw_velocity_command: 0.0
+  joint_torque_frac_coeff: 0.03
+  leg_cross_coefficient: 0.0
+  air_time_max_leg_coeff: 0.0
+  alive_clipped_coeff: 1.5
+  alive_unclipped_coeff: 0.5
+  actuator_joint_nominal_diff_coeff: 10.0
+  power_draw_frac_penalty_coeff: 0.03
+  feet_clearance_coeff: 0.0
+  lidar_height_coeff: 0.0
+  geom_below_ground_coeff: 100.0
+  feet_xy_force_coeff: 0.0
+  heading_reward_coeff: 0.0
+  yaw_velocity_coeff: 0.0
+  walking_backwards_coeff: 0.0
+  heading_front_coeff: 0.0
+  all_feet_in_air_coeff: 0.0
+  standing_penalty_coeff: 0.0
+  close_to_wall_reward: 0.75
+  reached_goal_coeff: 3.125
+  front_feet_in_air_coeff: 0.0
+  lidar_contact_coeff: 0.0
+  bias_reward_coeff: 2.0
+  still_alive_reward_coeff: 0.0
+  reward_episode_length_factor: 0.9
+  stall_reward_coeff: 5.0
+  cell_visit_reward: 8.0
+  bias_cell_reward_coeff: 2.0
+  bce_reward: 3.0
+  exploration_part_multiplier: 1.0
+  first_goal_part_multiplier: 1.0
+  second_goal_part_multiplier: 1.0
+  update_step_for_cell_visit: 1
+  centering_coeff: 2.0
+  maze_coverage_reward_coeff: 5.0
+
+lidar:
+  spinning_step_size: 80
+  horizontal_fov: 360
+  vertical_fov: 90
+  horizontal_step: 30
+  vertical_step: 2
+  min_depth: 0.05
+  max_depth: 3.0
+  sampling_resolution: 0.1
+  horizontal_noise: 0.08
+  vertical_noise: 0.034
+  point_noise: 0.02
+  lidar_pos_noise: 0.02
+  lidar_roll_noise: 0.087
+  lidar_pitch_noise: 0.087
+  lidar_yaw_noise: 0.15
+  height_map_radius: 1.0
+  height_map_nr_rays: 25
+  height_map_nr_points_per_ray: 10
+  max_clipping_height: 0.5
+  height_shadow_noise: 0.05
+
+domain_randomization:
+  randomization_prob: 0.0
+  action_delay:
+    max_nr_delay_steps: 1
+    delay_probability: 0.05
+  control:
+    motor_strength_min: 0.8
+    motor_strength_max: 1.2
+    p_gain_factor_min: 1.0
+    p_gain_factor_max: 1.0
+    d_gain_factor_min: 1.0
+    d_gain_factor_max: 1.0
+    asymmetric_factor_min: 1.0
+    asymmetric_factor_max: 1.0
+    position_offset_min: 0.0
+    position_offset_max: 0.0
+  model:
+    gravity_min: -8.81
+    gravity_max: -10.81
+    add_trunk_mass_min: -2
+    add_trunk_mass_max: 2.0
+    add_com_displacement_min: -0.01
+    add_com_displacement_max: 0.01
+    foot_size_min: 0.018
+    foot_size_max: 0.026
+    joint_damping_min: 0.0
+    joint_damping_max: 0.1
+    joint_armature_min: 0.005
+    joint_armature_max: 0.015
+    joint_stiffness_min: 0.0
+    joint_stiffness_max: 0.0
+    joint_friction_loss_min: 0.0
+    joint_friction_loss_max: 0.4
+    friction_tangential_factor: 0.5
+    friction_torsional_factor: 0.5
+    friction_rolling_factor: 0.5
+    damping_factor: 0.6
+    stiffness_factor: 0.5
+    add_impratio: 1.0
+    impratio_log10_range: 0.0
+    xy_gravity: 0.5
+    z_gravity: 0.1
+    base_geom_size_min: 0.05
+    base_geom_size_max: 0.1
+    base_geom_length_min: 0.05
+    base_geom_length_max: 0.15
+    lidar_geom_size_factor: 0.5
+  observation:
+    joint_position_noise: 0.01
+    joint_velocity_noise: 0.5
+    trunk_angular_velocity_noise: 0.2
+    trunk_linear_velocity_noise: null
+    gravity_vector_noise: 0.05
+    height_noise: 0.01
+    joint_position_ids: [ 3, 15 ]
+    joint_vel_ids: [ 15, 27 ]
+    last_action_ids: [ 27, 39 ]
+    angular_velocity_ids: [ 39, 42 ]
+    projected_gravity_vector_ids: [ 42, 45 ]
+    linear_velocity_ids: null
+    true_pos_noise: 0.2
+
+  height_map:
+    height_map_z_offset_noise: 0.02
+    height_map_tilt_roll_noise: 0.2
+    height_map_tilt_pitch_noise: 0.2
+    height_map_gaussian_std: 0.02
+    height_map_max_delay: 3
+    height_map_delay_probability: 0.05
+    lidar_pos_noise: 0.02
+    xy_grid_noise: 0.02
+    avg_kernel_deviation: 0.015
+    knn_lidar_height_map: 3
+  perturbation:
+    push_velocity_x_min: -0.3
+    push_velocity_x_max: 0.3
+    push_velocity_y_min: -0.3
+    push_velocity_y_max: 0.3
+    push_velocity_z_min: -0.3
+    push_velocity_z_max: 0.3
+    add_chance: 0.5
+    additive_multiplier: 1.5
+  initial_pos:
+    joint_pos_noise: 0.1
+    joint_pos_offset: 0.01
+    joint_vel_scale: 0.1
+    linear_vel_noise: 0.1
+    angular_vel_noise: 0.1
+    roll_angle_noise: 0.05
+    pitch_angle_noise: 0.05
+    yaw_angle_noise: 0.0
+
+training:
+  seed: 0
+  debug: false
+  visualize_grads: False
+  fixed_memory: False
+  training_steps: 2_500_000_000
+  batch_size: 100_000
+  minibatch_size: 25_000
+  nr_envs: 5_000
+  num_updates_per_batch: 5
+  nr_mazes: 100
+  file_mazes: "only_desc_300000"
+  upload_to_wandb: true
+  min_discount_factor: 0.995
+  max_discount_factor: 0.995
+  learning_rate: 3e-4
+  critic_learning_rate: 5e-4
+  head_learning_rate: 3e-4
+  optimizer_eps: 1e-5
+  optimizer_weight_decay: 1e-4
+  optimizer_clip_norm: 1.0
+  max_entropy_cost: 0.0004
+  min_entropy_cost: 0.0001
+  kl_div_thr: 0.15
+  gae_lambda: 0.9
+  clipping_epsilon: 0.2
+  million_steps_per_model_save: 50
+  million_steps_per_logging: 10
+  policy_loss_scaling_factor: 1.0
+  value_loss_scaling_factor: 1.0
+  bce_loss_scaling_factor: 0.5
+  delta_pos_loss_scaling_factor: 0.1
+  linear_velocity_loss_scaling_factor: 0.1
+  transformer_mask: null
+  drift_damping: 0.1
+  drift_noise: 0.05
+  drift_initial_noise_scaling: 0.02
+  true_pos_noise: 0.1
+  dropout_true_pos_noise: 3
+  dropout_pos_noise_chance: 0.0001
+
+eval:
+  nr_eval_envs: 1000
+  file_eval_maze_nr: "only_desc_100_eval"
+  nr_eval_mazes: 100
+  use_deterministic_eval: true
+  evaluation_at_curriculum_steps_debug: [ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ]
+  evaluation_at_curriculum_steps_prod: [ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ]
+
+experiments:
+  # Policies trained with this same parameter setup, evaluated one after another
+  # by experiments/data_creation.py. Each entry is written to
+  # experiments/data/<run_name>/policy_<n>/eval_data.pkl
+  policies:
+  - "experiment_checkpoints/LSTM/policy_1/finished"
+  - "experiment_checkpoints/LSTM/policy_2/finished"
+  - "experiment_checkpoints/LSTM/policy_3/finished"
+  nr_experiment_envs: 100
+  randomization_key: 0
+  live_policy: "experiment_checkpoints/LSTM/policy_1/finished"
+  live_out: "videos/live_videos/lstm"
+  env_index: 77
+  approach_index: 1
+  save_screenshots:
+  - 10
+  - 1750
+  - 3499
+
+visualizer:
+  policy_name: "local_1783009706/1153276928"
+  partial_trained_policy: true
+  video: false
+  used_height_encoder: false
+  used_gru: true
+  curriculum_level: 1.0
+  terrain_curriculum_level: 1.0
+  maze: "res0.1_r5_c5_cell2_wh0.5_mh30/maze_0.pkl"
+  deployment_name: "MatrixMemoryNoNorthVector_01"
+  key: 12

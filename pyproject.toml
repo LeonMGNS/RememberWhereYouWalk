@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rememberwalk"
+version = "1.0.0"
+description = "Memory-based maze exploration for legged robots, trained with PPO in MuJoCo MJX."
+authors = [{ name = "Leon Magnus" }]
+requires-python = ">=3.12"
+dependencies = [
+    "jax>=0.8.1",
+    "flax>=0.12.1",
+    "optax>=0.2.6",
+    "orbax-checkpoint>=0.11.31",
+    "mujoco>=3.4.0",
+    "mujoco-mjx>=3.4.0",
+    "numpy>=2.3",
+    "scipy>=1.16",
+    "jaxkd>=0.1.2",
+    "hydra-core>=1.3.2",
+    "omegaconf>=2.3",
+    "pyyaml>=6.0",
+    "wandb>=0.23",
+]
+
+[project.optional-dependencies]
+cuda = ["jax[cuda13]>=0.8.1"]
+vis = [
+    "opencv-python",
+    "pillow",
+    "matplotlib",
+    "glfw",
+    "pyopengl",
+]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rememberwalk = ["assets/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
