@@ -1,7 +1,7 @@
 """Filesystem locations used by rememberwalk.
 
-The robot model ships inside the package (ASSETS_DIR). Everything else -- maze
-files, checkpoints, logs and videos -- lives under ROOT_DIR:
+The robot model ships inside the package (ASSETS_DIR). Everything else -- configs,
+maze files, checkpoints, logs and videos -- lives under ROOT_DIR:
 
 * In a source checkout (``<root>/src/rememberwalk`` next to ``<root>/pyproject.toml``)
   ROOT_DIR is the repository root, regardless of the working directory.
@@ -28,3 +28,4 @@ ROOT_DIR = Path(os.environ.get("REMEMBERWALK_ROOT", _default_root())).resolve()
 DATA_DIR = Path(os.environ.get("REMEMBERWALK_DATA_DIR", ROOT_DIR / "data")).resolve()
 MAZE_DIR = DATA_DIR / "mazes"
 CKPT_DIR = Path(os.environ.get("REMEMBERWALK_CKPT_DIR", ROOT_DIR / "checkpoints")).resolve()
+CONFIG_DIR = ROOT_DIR / "configs"

@@ -28,12 +28,12 @@ def experiment_callback(actor_critic,eval_dict:dict,env:SimpleMazeEnv) -> Tuple[
     metrics = dict(state.metrics)
     metrics["bce_error"] =  bce_error
     metrics["bce_reward"] = bce_reward
-    #metrics["cell_visits"] = state.cell_visits
-    #metrics["predicted_distribution"] = predicted_distribution
-    #metrics["true_distribution"] = state.maze_description
-    #metrics["matrix_memory"] = matrix_memory
+    # Same metric set as the other experiment callbacks; the experiment plots read all of them
+    metrics["cell_visits"] = state.cell_visits
+    metrics["predicted_distribution"] = predicted_distribution
+    metrics["true_distribution"] = state.maze_description
+    metrics["pos"] =  state.delta_pos
     metrics["step"] = state.n_steps
-    #metrics["pos"] =  state.delta_pos
     eval_dict["state"] = state
     eval_dict["matrix_memory"]=matrix_memory
     eval_dict["action"] = action

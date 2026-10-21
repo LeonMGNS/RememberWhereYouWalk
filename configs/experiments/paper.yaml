@@ -1,0 +1,90 @@
+# Experiment suite of the paper: all figures and the live video.
+#
+#   python scripts/run_experiments.py
+#
+# This file only says WHICH trained runs are compared and HOW they are evaluated
+# and rendered. The architecture and environment of every run come from the
+# config.yaml that scripts/train.py saves next to its checkpoints.
+
+name: paper
+output_dir: outputs/experiments/paper
+
+# Applied on top of every run's training config. Only evaluation and rendering
+# settings belong here, never architecture or training hyperparameters.
+overrides:
+  robot.config: mjx_navigation_plot # same physics as mjx_navigation, plus the maze texture for rendering
+  eval.file_eval_maze_nr: only_desc_100_eval # every approach is evaluated on the same held-out mazes
+  eval.nr_eval_mazes: 100
+
+curriculum_level: 1.0
+terrain_curriculum_level: 1.0
+
+rollout:
+  nr_envs: 100 # environments per run
+  randomization_key: 0 # reset keys; env i is the same maze for every approach
+
+# The single environment shown in the prediction figure and the live video
+showcase:
+  env_index: 77
+  timesteps: [ 10, 1750, 3499 ] # figure columns and video screenshots
+
+# Order here = order in every figure and in the video.
+#   runs:         checkpoint paths relative to checkpoints/, one per seed
+#                 (scripts/train.py prints the path of its final checkpoint)
+#   config:       training config to use for runs WITHOUT a saved config.yaml
+#   showcase_run: index into runs of the policy shown in the prediction figure and video
+#   color:        0-255 RGB, used by every figure and the video
+approaches:
+- name: "LSMM (ours)"
+  color: [ 1, 115, 178 ]
+  config: lsmm
+  showcase_run: 1
+  runs:
+  - experiment_checkpoints/LSMM/policy_1
+  - experiment_checkpoints/LSMM/policy_2
+  - experiment_checkpoints/LSMM/policy_3
+
+- name: LSTM
+  color: [ 222, 143, 5 ]
+  config: lstm
+  runs:
+  - experiment_checkpoints/LSTM/policy_1
+  - experiment_checkpoints/LSTM/policy_2
+  - experiment_checkpoints/LSTM/policy_3
+
+- name: FixedWindow
+  color: [ 2, 158, 115 ]
+  config: fixed_window
+  runs:
+  - experiment_checkpoints/FixedWindow/policy_1
+  - experiment_checkpoints/FixedWindow/policy_2
+  - experiment_checkpoints/FixedWindow/policy_3
+
+- name: Transformer
+  color: [ 213, 94, 0 ]
+  config: transformer
+  runs:
+  - experiment_checkpoints/Transformer/policy_1
+  - experiment_checkpoints/Transformer/policy_2
+  - experiment_checkpoints/Transformer/policy_3
+
+# Ablations. An approach without runs is skipped; add the three checkpoints once trained.
+- name: SRU
+  color: [ 204, 120, 188 ]
+  config: sru
+  runs: []
+
+- name: "LSMM (additive)"
+  color: [ 202, 145, 97 ]
+  config: lsmm_additive
+  runs: []
+
+figures:
+  bce: plots/bce_error.pdf
+  exploration: plots/exploration.pdf
+  heat_maps: plots/heat_maps.pdf
+  predictions: plots/maze_predictions.pdf
+
+video:
+  file: videos/maze_predictions_live.mp4
+  frame_stride: 1

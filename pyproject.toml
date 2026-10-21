@@ -33,6 +33,11 @@ vis = [
     "glfw",
     "pyopengl",
 ]
+experiments = [
+    "opencv-python",
+    "matplotlib",
+    "seaborn",
+]
 dev = [
     "pytest",
     "ruff",

@@ -1,4 +1,4 @@
-run_name: "EvalMatrixMemory_1"
+run_name: "LSMM"
 
 imports:
   # Architecture imports
@@ -58,7 +58,7 @@ env:
 
 robot:
   name: "GO2"
-  config: "height_map_vis"
+  config: "mjx_navigation"
 
 architecture:
   min_scale: 0.025
@@ -330,43 +330,3 @@ eval:
   use_deterministic_eval: true
   evaluation_at_curriculum_steps_debug: [ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ]
   evaluation_at_curriculum_steps_prod: [ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ]
-
-experiments:
-  # Policies trained with this same parameter setup, evaluated one after another
-  # by experiments/data_creation.py. Each entry is written to
-  # experiments/data/<run_name>/policy_<n>/eval_data.pkl
-  policies:
-  - "experiment_checkpoints/MatrixMemory/policy_1/finished"
-  - "experiment_checkpoints/MatrixMemory/policy_2/finished"
-  - "experiment_checkpoints/MatrixMemory/policy_3/finished"
-  prediction_runs:
-  - "EvalMatrixMemory_1/policy_3"
-  - "EvalLSTM_1/policy_1"
-  - "EvalMatrixMemory_1/policy_2"
-  - "EvalMatrixMemory_1/policy_3"
-  env_index: 77
-  live_policy: "experiment_checkpoints/MatrixMemory/policy_2/finished"
-  live_out: "videos/live_videos/rea_lsmm"
-  memory_out: "videos/live_videos/lsmm_memory"
-  approach_index: 0
-  save_screenshots:
-  - 10
-  - 1750
-  - 3499
-
-  nr_experiment_envs: 100
-  randomization_key: 0
-  real_pkl: "/home/leon-magnus/repos/visual_locomotion_mjx/experiments/data/EvalDeployment_1/eval_data.pkl"
-  orientation: "identity"
-
-visualizer:
-  policy_name: "local_1784828266/2466899968"
-  partial_trained_policy: false
-  video: false
-  used_height_encoder: false
-  used_gru: true
-  curriculum_level: 1.0
-  terrain_curriculum_level: 1.0
-  maze: "res0.1_r5_c5_cell2_wh0.5_mh30/maze_0.pkl"
-  deployment_name: "MatrixMemoryNoNorthVector_01"
-  key: 652392

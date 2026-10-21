@@ -500,13 +500,15 @@ def generate_setup(config_dict: dict) -> dict:
 
         },
         "visualizer": {
-            "policy": vis_cfg.get("policy_name"),
-            "partial_trained_policy": vis_cfg.get("partial_trained_policy"),
-            "video": vis_cfg.get("video"),
-            "curriculum_level": vis_cfg.get("curriculum_level"),
-            "terrain_curriculum_level": vis_cfg.get("terrain_curriculum_level"),
-            "used_height_encoder": vis_cfg.get("used_height_encoder"),
-            "used_gru": vis_cfg.get("used_gru"),
+            # Viewer settings are not part of the training configs; pass them on the
+            # command line, e.g. +visualizer.policy_name=non_sweep/local_<id>/<step>
+            "policy": vis_cfg.get("policy_name", "None"),
+            "partial_trained_policy": vis_cfg.get("partial_trained_policy", False),
+            "video": vis_cfg.get("video", False),
+            "curriculum_level": vis_cfg.get("curriculum_level", 1.0),
+            "terrain_curriculum_level": vis_cfg.get("terrain_curriculum_level", 1.0),
+            "used_height_encoder": vis_cfg.get("used_height_encoder", False),
+            "used_gru": vis_cfg.get("used_gru", False),
             "params_type": Params,
             "use_observation_history": False,
             "visualizer_callback_function": visualizer_callback,

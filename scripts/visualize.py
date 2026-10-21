@@ -43,7 +43,7 @@ class Visualizer:
         self.actor_critic = self.training_config["actor_critic"]
         self.env = self.env_config["mode"](self.env_config)
         self.visualizer_dict["env"]= self.env
-        ckpt_dir = f"{CKPT_DIR}/non_sweep"
+        ckpt_dir = str(CKPT_DIR)
         if visualizer_setup["policy"] == "None":
             self.policy_params = self.actor_critic.params
         else:
@@ -183,7 +183,7 @@ def main(cfg: DictConfig):
     if not cfg:
         raise ValueError("No config file specified.\n"
                         "You must define a configuration file to run this script.\n"
-                        "Example usage: python3 runner.py --config-name=Matrix_Memory_GR_Loc\n")
+                        "Example usage: python3 scripts/%s --config-name=lsmm +visualizer.policy_name=non_sweep/local_<id>/<step>\n" % __file__.split("/")[-1])
 
     
     #Load config

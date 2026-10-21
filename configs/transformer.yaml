@@ -1,4 +1,4 @@
-run_name: "EvalTransformer_1"
+run_name: "Transformer"
 
 imports:
   # Architecture imports
@@ -58,7 +58,7 @@ env:
 
 robot:
   name: "GO2"
-  config: "mjx_navigation_plot"
+  config: "mjx_navigation"
 
 architecture:
   min_scale: 0.025
@@ -328,34 +328,3 @@ eval:
   use_deterministic_eval: true
   evaluation_at_curriculum_steps_debug: [ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ]
   evaluation_at_curriculum_steps_prod: [ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ]
-
-experiments:
-  # Policies trained with this same parameter setup, evaluated one after another
-  # by experiments/data_creation.py. Each entry is written to
-  # experiments/data/<run_name>/policy_<n>/eval_data.pkl
-  policies:
-  - "experiment_checkpoints/Transformer/policy_1/finished"
-  - "experiment_checkpoints/Transformer/policy_2/finished"
-  - "experiment_checkpoints/Transformer/policy_3/finished"
-  nr_experiment_envs: 100
-  randomization_key: 0
-  live_policy: "experiment_checkpoints/Transformer/policy_1/finished"
-  live_out: "videos/live_videos/Transformer"
-  approach_index: 3
-  env_index: 77
-  save_screenshots:
-  - 10
-  - 1750
-  - 3499
-
-visualizer:
-  policy_name: "local_1781548310/5328007168"
-  partial_trained_policy: true
-  video: false
-  used_height_encoder: false
-  used_gru: true
-  curriculum_level: 1.0
-  terrain_curriculum_level: 1.0
-  maze: "res0.1_r5_c5_cell2_wh0.5_mh30/maze_0.pkl"
-  deployment_name: "MatrixMemoryNoNorthVector_01"
-  key: 12

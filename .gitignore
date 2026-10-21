@@ -37,3 +37,6 @@ wandb_login_key.txt
 # Maze data: ignore generated files, but track the training maze set
 *.pkl
 !data/mazes/maze_only_desc_300000.pkl
+
+# MuJoCo writes its warnings here
+MUJOCO_LOG.TXT

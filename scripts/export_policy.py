@@ -9,7 +9,7 @@ def main(cfg: DictConfig):
     if not cfg:
         raise ValueError("No config file specified.\n"
                         "You must define a configuration file to run this script.\n"
-                        "Example usage: python3 runner.py --config-name=Matrix_Memory_GR_Loc\n")
+                        "Example usage: python3 scripts/%s --config-name=lsmm +visualizer.policy_name=non_sweep/local_<id>/<step>\n" % __file__.split("/")[-1])
 
     
     #Load config
@@ -25,7 +25,9 @@ def main(cfg: DictConfig):
     visualizer_setup = setup["visualizer"]
     env_setup = setup["env"]
     training_setup = setup["training"]
-    ckpt_dir = f"{CKPT_DIR}/non_sweep"
+    ckpt_dir = str(CKPT_DIR)
+    if visualizer_setup["deployment_name"] is None:
+        raise ValueError("Set the output name with +visualizer.deployment_name=<name>")
     deployment_dir = f"{dir_path}/deployment_checkpoints/{visualizer_setup["deployment_name"]}"
     params = restore_ckpt(ckpt_dir,None,visualizer_setup)
     extract_and_save_actor(params,deployment_dir)
