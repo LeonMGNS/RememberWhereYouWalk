@@ -52,12 +52,11 @@ def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, tr
         ppo_trainer.actor_critic.log_prob_from_observation, (0, None, 0, 0, 0)
     )(actor_actions, params, actor_observation, actor_height_observation, lstm_encodings)
 
-    # Interpolate Discount Factor
-    discount_factor = ppo_trainer.min_discount_factor
+    discount_factor = ppo_trainer.discount_factor
     
     # Compute Critic
     baseline = jax.vmap(ppo_trainer.actor_critic.evaluate_actions, (None, 0, 0))(params, critic_observation, critic_height_observation)
-    bootstrap_value = ppo_trainer.actor_critic.evaluate_actions(params, critic_observation[-1], critic_next_height_observations[-1])
+    bootstrap_value = ppo_trainer.actor_critic.evaluate_actions(params, critic_next_observation[-1], critic_next_height_observations[-1])
     terminated_bootstrap_value = jnp.zeros_like(bootstrap_value)
     bootstrap_value = jnp.where(dones[-1], terminated_bootstrap_value, bootstrap_value)
     next_value = jax.lax.stop_gradient(jnp.concatenate([baseline[1:], jnp.expand_dims(bootstrap_value, 0)], axis=0))
@@ -66,6 +65,8 @@ def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, tr
     termination = dones * (1 - truncations)
     truncation_mask = 1 - truncations
     deltas = rewards + discount_factor * next_value * (1 - termination) - baseline
+    # After a timeout the env has already reset, so next_value belongs to the next episode
+    deltas *= truncation_mask
     acc = jnp.zeros_like(deltas[0])
     def compute_gae(carry, target):
         lambda_, acc = carry
@@ -132,11 +133,6 @@ def compute_bce_loss(predicted_distribution: jnp.ndarray, true_distribution: jnp
     loss = optax.losses.sigmoid_binary_cross_entropy(predicted_distribution, true_distribution)
     loss = jnp.mean(loss, axis=-1)
     return loss
-
-
-def interpolate_param(min_val, max_val, curr_coeff):
-    new_value = (1 - curr_coeff) * min_val + curr_coeff * max_val  # Interpolates in [min_val, max_val]
-    return jnp.clip(new_value, min_val, max_val)
 
 
 def interpolate_entropy_cost(min_entropy_cost, max_entropy_cost, training_steps, max_training_steps=6_000_000_000.0):

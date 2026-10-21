@@ -288,11 +288,10 @@ training:
   minibatch_size: 25_000
   nr_envs: 5_000
   num_updates_per_batch: 5
-  nr_mazes: 100
+  nr_mazes: 300_000
   file_mazes: "only_desc_300000"
   upload_to_wandb: true
-  min_discount_factor: 0.995
-  max_discount_factor: 0.995
+  discount_factor: 0.995
   learning_rate: 3e-4
   critic_learning_rate: 5e-4
   head_learning_rate: 3e-4

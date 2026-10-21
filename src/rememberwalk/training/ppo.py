@@ -38,8 +38,7 @@ class PPOTrainer:
         self.nr_envs = training_config["nr_envs"]
         self.optimizer =  training_config["optimizer"]
         self.minibatch_size = training_config["minibatch_size"]
-        self.min_discount_factor = training_config["min_discount_factor"]
-        self.max_discount_factor = training_config["max_discount_factor"]
+        self.discount_factor = training_config["discount_factor"]
         self.gae_lambda = training_config["gae_lambda"]
         self.clipping_epsilon = training_config["clipping_epsilon"]
         self.min_entropy_cost = training_config["min_entropy_cost"]
@@ -102,6 +101,8 @@ class PPOTrainer:
 
 
     def save_ckpt(self, state: TrainingState, step: int):
+        if self.checkpoint_manager.latest_step() == int(step):
+            return
         state_dict = serialization.to_state_dict(state)
         self.checkpoint_manager.save(int(step), state_dict)
 
@@ -133,9 +134,10 @@ class PPOTrainer:
         
         #Start training loop
         carry, latest_logging_step = self.training_epoch_loop(carry, latest_logging_step,logger)
-        carry = (env_state, training_state, key)
+        env_state, training_state, key = carry
         self.save_ckpt(training_state, training_state.training_steps)
-        return carry[1]
+        self.checkpoint_manager.wait_until_finished()
+        return training_state
 
     def training_epoch_loop(self, carry, latest_logging_step,logger):
         logging_counter = 0
@@ -200,12 +202,13 @@ class PPOTrainer:
         params_update, optimizer_state = self.optimizer.update(grads, training_state.optimizer_state,params=training_state.params)
         params = optax.apply_updates(training_state.params, params_update)
         new_training_state = training_state.replace(optimizer_state=optimizer_state, params=params)
-        new_training_state = new_training_state.replace(training_steps=training_state.training_steps + self.num_training_steps_per_minibatch)
         loss_metrics = aux_data[0]
         key = aux_data[1]
         kl_div_stop = (jnp.abs(jnp.mean(loss_metrics["approx_kl_div"])) > self.kl_div_thr) | kl_div_stop
         loss_metrics["kl_div_stop"] = kl_div_stop
         training_state = jax.lax.cond(kl_div_stop, lambda: training_state, lambda: new_training_state)
+        # Count the collected env steps even if the KL early stop rejected the update
+        training_state = training_state.replace(training_steps=training_state.training_steps + self.num_training_steps_per_minibatch)
         return (training_state,kl_div_stop,key), loss_metrics
     
     def sgd_step(self, carry, _):
@@ -251,7 +254,7 @@ class PPOTrainer:
                 lambda metric: jnp.where(state_already_terminated,0.0, metric),
                 metrics
             )
-            just_finished = ((eval_dict["state"].done | (eval_dict["state"].n_steps >= 3499)) & (~state_already_terminated.astype(jnp.bool_)))
+            just_finished = ((eval_dict["state"].done | (eval_dict["state"].n_steps >= self.environment.episode_length - 1)) & (~state_already_terminated.astype(jnp.bool_)))
             summed_reward = jnp.where(just_finished, eval_dict["state"].summed_reward, summed_reward)
             state_already_terminated = jnp.where(eval_dict["state"].done, jnp.ones_like(state_already_terminated), state_already_terminated)
             return (eval_dict,state_already_terminated,episode_length,summed_reward,state_keys[-1]), masked_metrics

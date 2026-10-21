@@ -72,11 +72,11 @@ def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, tr
     # the height encoder.  The result shape is (nr_envs, T, encoded_height_size).
     height_encoded = ppo_trainer.actor_critic.height_encoder.apply(
         params.height_encoder_parameters, actor_h_obs
-    ).squeeze()
+    )
     pred_linear_vel = ppo_trainer.actor_critic.linear_velocity_head.apply(params.linear_velocity_parameters,actor_obs)
 
     # Build the [actor_obs || encoded_height] sequence and reconstruct causal histories.
-    encoded_seq = jnp.concatenate([actor_obs, height_encoded,pred_linear_vel,noisy_true_pos], axis=-1)  # (nr_envs, T, input_size)
+    encoded_seq = jnp.concatenate([actor_obs, height_encoded,jax.lax.stop_gradient(pred_linear_vel),noisy_true_pos], axis=-1)  # (nr_envs, T, input_size)
     obs_histories = create_observation_history(encoded_seq, transitions.done, seq_len)
     # obs_histories: (nr_envs, T, seq_len, input_size)
 
@@ -94,7 +94,7 @@ def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, tr
 
     termination      = dones * (1 - truncations)
     trunc_mask       = 1 - truncations
-    gamma            = ppo_trainer.min_discount_factor
+    gamma            = ppo_trainer.discount_factor
     deltas           = rewards + gamma * next_value * (1 - termination) - baseline
     deltas          *= trunc_mask
     acc              = jnp.zeros_like(deltas[0])
@@ -120,9 +120,9 @@ def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, tr
     rho         = jnp.exp(log_diff)
     surrogate1  = rho * advantages
     surrogate2  = jnp.clip(rho, 1 - ppo_trainer.clipping_epsilon, 1 + ppo_trainer.clipping_epsilon) * advantages
-    policy_loss = -jnp.mean(jnp.minimum(surrogate1, surrogate2))
+    policy_loss = ppo_trainer.training_config["policy_loss_scaling_factor"] * -jnp.mean(jnp.minimum(surrogate1, surrogate2))
 
-    v_loss      = jnp.mean((vs - baseline) ** 2) * 0.5
+    v_loss      = ppo_trainer.training_config["value_loss_scaling_factor"] * jnp.mean((vs - baseline) ** 2) * 0.5
 
     entropy_cost  = interpolate_entropy_cost(ppo_trainer.min_entropy_cost, ppo_trainer.max_entropy_cost, training_steps,float(ppo_trainer.training_steps))
     entropy       = jnp.mean(ppo_trainer.actor_critic.entropy(current_loc, current_scale))

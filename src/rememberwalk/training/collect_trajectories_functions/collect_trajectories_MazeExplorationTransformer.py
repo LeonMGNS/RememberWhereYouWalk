@@ -2,6 +2,7 @@ import jax.numpy as jnp
 from rememberwalk.actor_critic.Transformer import Transition, TrainingState
 from rememberwalk.states.MazeState import MazeState
 from rememberwalk.training.ppo import PPOTrainer
+from rememberwalk.training.collect_trajectories_functions.linear_velocity_target import linear_velocity_target
 import jax
 import optax
 
@@ -46,7 +47,7 @@ def collect_trajectories(ppo_trainer: PPOTrainer, env_state: MazeState , trainin
         #Logging
         summed_reward = jnp.where(env_state.done, env_state.summed_reward, 0.0)
         episode_length = jnp.where(env_state.done, env_state.n_steps, 0.0)
-        linear_velocity = jnp.concat([old_state.pipeline_state.qvel[:,:2],old_state.pipeline_state.qvel[:,5].reshape((-1,1))],axis=-1)
+        linear_velocity = jax.vmap(linear_velocity_target)(old_state.pipeline_state.qpos, old_state.pipeline_state.qvel)
         metrics = dict(env_state.metrics)
         metrics["auxiliary_reward"] =  auxiliary_reward
         metrics["max_loc_error"] = jnp.zeros_like(env_state.reward)
