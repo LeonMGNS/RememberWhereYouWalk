@@ -1,5 +1,5 @@
 
-from rememberwalk.utils.script_utils import get_dir_and_run_for_checkpointing,dir_path,filter_nested,EmptyLogger
+from rememberwalk.utils.script_utils import get_dir_and_run_for_checkpointing,filter_nested,EmptyLogger
 from rememberwalk.utils.generate_setup import generate_setup
 import optax
 import time
@@ -38,8 +38,7 @@ def main(cfg: DictConfig):
 
     if upload_to_wandb:
         print("Updating for WANDB config")
-        f = open(f'{dir_path}/wandb_login_key.txt', 'r').read()
-        wandb.login(key=f)
+        wandb.login()
 
         base_name = config.get("run_name", "experiment")
         ckpt_dir,run = get_dir_and_run_for_checkpointing()
@@ -56,7 +55,7 @@ def main(cfg: DictConfig):
         
         
         #Init wandb
-        with wandb.init(project="MazeNavigation",name=f"{final_run_name}",config=config) as logger:
+        with wandb.init(project=config.get("wandb_project", "MazeNavigation"),name=f"{final_run_name}",config=config) as logger:
             env_setup = setup["env"]
             training_setup = setup["training"]
             environment = env_setup["mode"](env_setup)

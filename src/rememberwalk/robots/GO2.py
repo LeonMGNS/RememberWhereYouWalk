@@ -1,5 +1,5 @@
 from rememberwalk.robots.BaseRobot import BaseRobot
-from pathlib import Path
+from rememberwalk.utils.paths import ASSETS_DIR
 import mujoco
 import jax.numpy as jnp
 import mujoco.mjx as mjx
@@ -12,10 +12,8 @@ class GO2(BaseRobot):
 
     def __init__(self, model="mjx") -> None:
         super().__init__()
-        self.current_file_path = Path(__file__).resolve()
-        self.dir_path = str(self.current_file_path.parent.parent.parent.parent)
         self.model: mujoco.MjModel = mujoco.MjModel.from_xml_path(
-            f"{self.dir_path}/src/rememberwalk/assets/go2/go2_{model}.xml"
+            str(ASSETS_DIR / "go2" / f"go2_{model}.xml")
         )
         self.actuators = []
         self.actuators_id = []

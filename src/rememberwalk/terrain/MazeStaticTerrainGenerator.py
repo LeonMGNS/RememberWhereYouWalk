@@ -3,7 +3,7 @@ import jax
 from rememberwalk.env.SimpleMazeEnv import SimpleMazeEnv
 from rememberwalk.states.MazeState import MazeState
 from mujoco import mjx
-from rememberwalk.utils.script_utils import dir_path
+from rememberwalk.utils.paths import MAZE_DIR
 from rememberwalk.terrain.maze_generation.wilson_algorithm import Maze
 from jax.scipy.spatial.transform import Rotation
 import pickle
@@ -26,7 +26,7 @@ class MazeStaticGenerator:
         self.maze_creator = Maze(self.terrain_parameters,save_to_file=False)
         if not eval_mode:
             if from_file:
-                maze_path = f"{dir_path}/src/visual_locomotion_mjx/terrain/generated_terrain/maze_{terrain_parameters["maze_file"]}.pkl"
+                maze_path = f"{MAZE_DIR}/maze_{terrain_parameters["maze_file"]}.pkl"
                 with open(maze_path, "rb") as f: 
                     maze_dict = pickle.load(f)
                 
@@ -39,7 +39,7 @@ class MazeStaticGenerator:
                 self.hfield,self.start_fields,maze_descriptions = self.maze_creator.generate_terrain()
             self.nr_mazes = terrain_parameters["nr_mazes"]
         else:
-            maze_path = f"{dir_path}/src/visual_locomotion_mjx/terrain/generated_terrain/maze_{terrain_parameters["eval_maze_file"]}.pkl"
+            maze_path = f"{MAZE_DIR}/maze_{terrain_parameters["eval_maze_file"]}.pkl"
             with open(maze_path, "rb") as f: 
                 maze_dict = pickle.load(f)
                 maze_descriptions = jnp.array(maze_dict["maze_descriptions"]).astype(jnp.float32)

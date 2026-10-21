@@ -2,7 +2,8 @@ import random
 import jax.numpy as jnp
 import pickle
 import numpy as np
-from rememberwalk.utils.script_utils import dir_path,get_highest_maze_index
+from rememberwalk.utils.script_utils import get_highest_maze_index
+from rememberwalk.utils.paths import MAZE_DIR
 import jax
 from copy import deepcopy
 class Maze:
@@ -47,7 +48,7 @@ class Maze:
                     "maze_descriptions": np.array(maze_descriptions),
                 }
 
-            save_path = f"{dir_path}/src/visual_locomotion_mjx/terrain/generated_terrain/"
+            save_path = f"{MAZE_DIR}/"
             with open(f"{save_path}/maze_only_desc_{self.nr_mazes}.pkl", "wb") as f: 
                 pickle.dump(save_dict, f)
         else:
@@ -55,7 +56,7 @@ class Maze:
     
 
     def generate_eval_only_maze_description(self):
-            with open(f"{dir_path}/src/visual_locomotion_mjx/terrain/generated_terrain/maze_only_desc_300000.pkl", "rb") as f: 
+            with open(f"{MAZE_DIR}/maze_only_desc_300000.pkl", "rb") as f: 
                 maze_dict = pickle.load(f)
             training_descriptions = maze_dict["maze_descriptions"]
             eval_mazes = []
@@ -85,8 +86,7 @@ class Maze:
                     "maze_descriptions": np.array(maze_descriptions),
                 }
 
-            # Make sure dir_path is accessible in your scope
-            save_path = f"{dir_path}/src/visual_locomotion_mjx/terrain/generated_terrain/"
+            save_path = f"{MAZE_DIR}/"
             with open(f"{save_path}/maze_only_desc_{self.nr_mazes}_eval.pkl", "wb") as f: 
                 pickle.dump(save_dict, f)
 
@@ -318,8 +318,7 @@ class Maze:
                     "maze_descriptions": np.array(maze_description),
                 }
 
-            # Make sure dir_path is accessible in your scope
-        save_path = f"{dir_path}/src/visual_locomotion_mjx/terrain/generated_terrain/"
+        save_path = f"{MAZE_DIR}/"
         with open(f"{save_path}/maze_only_desc_lab_maze.pkl", "wb") as f: 
             pickle.dump(save_dict, f)
         return rep

@@ -8,6 +8,7 @@ import orbax.checkpoint as ocp
 import time
 import mujoco
 from rememberwalk.utils.Viewer import Viewer
+from rememberwalk.utils.paths import CKPT_DIR
 from rememberwalk.utils.script_utils import dir_path, generate_unique_path,update_maze_figure,restore_ckpt,render
 from flax.training import orbax_utils
 from flax import serialization
@@ -36,13 +37,13 @@ class Visualizer:
         self.env_config["initial_curr_coeff"] = self.curr_coeff
         self.visualizer_dict = self.visualizer_config["visualizer_dict"]
         self.seed = int(time.time())
-        self.ckpt_dir = f"{dir_path}/checkpoints/"
+        self.ckpt_dir = f"{CKPT_DIR}/"
         self.joystick = None
         self.cpu_device = jax.devices("cpu")
         self.actor_critic = self.training_config["actor_critic"]
         self.env = self.env_config["mode"](self.env_config)
         self.visualizer_dict["env"]= self.env
-        ckpt_dir = f"{dir_path}/checkpoints/non_sweep"
+        ckpt_dir = f"{CKPT_DIR}/non_sweep"
         if visualizer_setup["policy"] == "None":
             self.policy_params = self.actor_critic.params
         else:
@@ -177,7 +178,7 @@ class Visualizer:
                 time.sleep(0.02 - (time_end - time_start))
 
 
-@hydra.main(version_base="1.3", config_path=f"{dir_path}/script/configs", config_name=None)
+@hydra.main(version_base="1.3", config_path="../configs", config_name=None)
 def main(cfg: DictConfig):
     if not cfg:
         raise ValueError("No config file specified.\n"

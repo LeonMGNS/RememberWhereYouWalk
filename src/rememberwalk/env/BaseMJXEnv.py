@@ -1,5 +1,4 @@
 import mujoco
-from pathlib import Path
 from mujoco import mjx
 from mujoco.mjx import Model, Data
 import jax
@@ -10,9 +9,6 @@ class BaseMJXEnv:
 
     def __init__(self, parameters: dict) -> None:
         self.robot = parameters["robot"]
-        self.current_file_path = Path(__file__).resolve()
-        self.dir_path = str(self.current_file_path.parent.parent.parent.parent)
-        self.current_file_path = str(self.current_file_path)
         self.model = self.robot.model
         self.data = mujoco.MjData(self.model)
         mujoco.mj_resetDataKeyframe(self.model, self.data, 0)

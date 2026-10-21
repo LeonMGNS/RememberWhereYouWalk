@@ -9,7 +9,7 @@ def _resolve_import(import_path: Optional[str]) -> Any:
         return None
         
     # Ensure the required base package prefix is present
-    prefix = "visual_locomotion_mjx."
+    prefix = "rememberwalk."
     if not import_path.startswith(prefix):
         import_path = prefix + import_path
         
@@ -247,99 +247,7 @@ def generate_setup(config_dict: dict) -> dict:
         max_delay_steps = action_delay_module.max_nr_delay_steps if action_delay_module else None
         hm_max_delay = dr_cfg.get("height_map").get("height_map_max_delay") if dr_cfg.get("height_map") else None
 
-        if imports_cfg.get("state").split(".")[-1] == "WalkingState":
-            state = MazeState(
-                model=initial_mjx_model, 
-                pipeline_state=initial_mjx_data,
-                last_action=jnp.zeros(int(actor_out_size/2), dtype=jnp.float32),
-                prev_joint_vel=jnp.zeros_like(initial_mjx_data.qvel[robot.joint_qvel_adr]),
-                obs=jnp.zeros(actor_obs_size, dtype=jnp.float32),
-                critic_obs=jnp.zeros(val_obs_size, dtype=jnp.float32),
-                reward=jnp.array(0, dtype=jnp.float32),
-                done=jnp.array(True, dtype=jnp.bool_),
-                target_velocities=jnp.zeros(3,dtype=jnp.float32),
-                last_touch=jnp.zeros(robot.geom_feet_ids.shape, dtype=jnp.float32),
-                curr_coeff = jnp.array(curr_cfg.get("initial_curriculum_value")),
-                summed_reward=jnp.array(0, dtype=jnp.float32),
-                action_delay=jnp.zeros((action_delay_module.max_nr_delay_steps, int(actor_out_size/2)), dtype=jnp.float32),
-                height_obs=jnp.zeros((1, nr_height_map_points)),
-                height_delay=jnp.zeros(( dr_parameters["height_map_parameters"]["height_map_max_delay"],nr_height_map_points)),
-                critic_height_obs=jnp.zeros(critic_nr_height_map_points),
-                truncation=jnp.array(False, dtype=jnp.bool_),
-                n_steps=jnp.array(0, dtype=jnp.int32),
-                extrinsic_motor_strength=jnp.ones(robot.action_size),
-                extrinsic_p_gain_factor=jnp.ones(robot.action_size),
-                extrinsic_d_gain_factor=jnp.ones(robot.action_size),
-                extrinsic_position_offset=jnp.zeros(robot.action_size),
-                terrain_curr_coeff=jnp.array(curr_cfg.get("initial_terrain_curr_coeff"), dtype=jnp.float32),
-                height_map_offset=0.0,
-                height_map_kernel=jnp.zeros((3, 3, 1, 1)),
-                height_map_tilt=jnp.zeros((3, 3)),
-                height_map_xy_noise=jnp.zeros((2,), dtype=jnp.float32),
-                metrics={},
-                lidar_horizontal_pos=jnp.zeros((),dtype=jnp.float32),
-                travelled_distance=jnp.array(0.0,dtype=jnp.float32),
-                gr_height_obs=jnp.zeros((1, nr_height_map_points)),
-        
-            )
-        
-        elif imports_cfg.get("state").split(".")[-1] == "ReachGoalState":
-            state = MazeState(model=initial_mjx_model, 
-                pipeline_state=initial_mjx_data,
-                last_action=jnp.zeros(int(actor_out_size / 2), dtype=jnp.float32),
-                prev_joint_vel=jnp.zeros_like(initial_mjx_data.qvel[robot.joint_qvel_adr]),
-                obs=jnp.zeros(actor_obs_size, dtype=jnp.float32),
-                critic_obs=jnp.zeros(val_obs_size, dtype=jnp.float32),
-                reward=jnp.array(0, dtype=jnp.float32),
-                done=jnp.array(True, dtype=jnp.bool_),
-                current_target_heading=jnp.zeros(2, dtype=jnp.float32),
-                last_touch=jnp.zeros(robot.geom_feet_ids.shape, dtype=jnp.float32),
-                goal_position=jnp.zeros((2,), dtype=jnp.float32),
-                curr_coeff=jnp.array(curr_cfg.get("initial_curriculum_value")),
-                bias_reward_active=jnp.array(True, dtype=jnp.bool_),
-                summed_reward=jnp.array(0, dtype=jnp.float32),
-                action_delay=jnp.zeros((max_delay_steps, int(actor_out_size / 2)), dtype=jnp.float32),
-                height_obs=jnp.zeros((1, nr_height_map_points)),
-                height_delay=jnp.zeros((hm_max_delay, nr_height_map_points)),
-                critic_height_obs=jnp.zeros(critic_nr_height_map_points),
-                truncation=jnp.array(False, dtype=jnp.bool_),
-                n_steps=jnp.array(0, dtype=jnp.int32),
-                extrinsic_motor_strength=jnp.ones(robot.action_size),
-                extrinsic_p_gain_factor=jnp.ones(robot.action_size),
-                extrinsic_d_gain_factor=jnp.ones(robot.action_size),
-                extrinsic_position_offset=jnp.zeros(robot.action_size),
-                terrain_curr_coeff=jnp.array(curr_cfg.get("initial_terrain_curr_coeff"), dtype=jnp.float32),
-                max_allowed_curr_coeff=curr_cfg.get("initial_curriculum_value"),
-                max_allowed_terrain_curr_coeff=curr_cfg.get("initial_terrain_curr_coeff"),
-                height_map_offset=0.0,
-                height_map_kernel=jnp.zeros((3, 3, 1, 1)),
-                height_map_tilt=jnp.zeros((3, 3)),
-                reward_scaling_factor=jnp.array((0.0), dtype=jnp.float32),
-                height_map_xy_noise=jnp.zeros((2,), dtype=jnp.float32),
-                maze_nr=jnp.array(0, dtype=jnp.int32),
-                metrics={},
-                wall_position=jnp.zeros(2, dtype=jnp.float32),
-                lidar_horizontal_pos=jnp.zeros((), dtype=jnp.float32),
-                time_to_reach_goal=jnp.zeros((), dtype=jnp.float32),
-                cell_visits=jnp.zeros((terrain_parameters["cell_visit_matrix_x_size"], terrain_parameters["cell_visit_matrix_y_size"]), dtype=jnp.float32),
-                first_goal_reward_given=jnp.array(False, dtype=jnp.bool_),
-                second_goal_reward_given=jnp.array(False, dtype=jnp.bool_),
-                reached_goals=jnp.array([False, False], dtype=jnp.bool_),
-                travelled_distance=jnp.array(0.0, dtype=jnp.float32),
-                nr_goals_reached=jnp.array(0, dtype=jnp.int32),
-                starting_pos=jnp.zeros((3,), dtype=jnp.float32),
-                delta_pos=jnp.zeros((3,), dtype=jnp.float32),
-                no_goal_position=jnp.array(False, dtype=jnp.bool_),
-                maze_description=jnp.zeros((distribution_size,), dtype=jnp.float32),
-                exploration_phase_length=jnp.zeros((), dtype=jnp.int32),
-                sampled_terrain_curr_coeff=jnp.zeros((), dtype=jnp.float32),
-                proprio_cell_values = jnp.zeros((maze_rows,maze_cols,proprio_values),dtype=jnp.float32),
-                max_loc_error = jnp.zeros((), dtype=jnp.float32),
-                use_pred_loc = jnp.array(False, dtype=jnp.bool_),
-                gr_height_obs=jnp.zeros((1, nr_height_map_points)),
-            )
-        
-        elif imports_cfg.get("state").split(".")[-1] == "MazeStateObservationHistory":
+        if imports_cfg.get("state").split(".")[-1] == "MazeStateObservationHistory":
             sequence_length = None
             if mem_cfg.get('transformer_sequence_length') is not None:
                 sequence_length = mem_cfg.get('transformer_sequence_length')

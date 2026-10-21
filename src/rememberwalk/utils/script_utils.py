@@ -7,6 +7,7 @@ import numpy as np
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
 import optax
+from rememberwalk.utils.paths import ROOT_DIR, CKPT_DIR
 from rememberwalk.actor_critic.Transformer import TrainingState as TrainingStateTransformer
 import jax.numpy as jnp
 import jax
@@ -141,9 +142,8 @@ def to_cpu(tree):
         return jax.tree_util.tree_map(lambda x: jax.device_put(x, jax.devices("cpu")[0]) if isinstance(x, jax.Array) else x, tree)
 
 # Directory settings
-current_file_path = Path(__file__).resolve()
-dir_path = str(current_file_path.parent.parent.parent.parent)
-ckpt_dir = f"{dir_path}/checkpoints/"
+dir_path = str(ROOT_DIR)
+ckpt_dir = f"{CKPT_DIR}/"
 save_ckpt_dir = f"{dir_path}/converged_checkpoints"
 
 # Wandb config filter
@@ -184,7 +184,7 @@ def generate_unique_path(dir_path, run):
 
 def get_dir_and_run_for_checkpointing():
     # Base checkpoints directory
-    base_checkpoint_dir = Path(dir_path) / "checkpoints"
+    base_checkpoint_dir = CKPT_DIR
     
     # Extract W&B environment variables
     sweep_id = os.environ.get("WANDB_SWEEP_ID")

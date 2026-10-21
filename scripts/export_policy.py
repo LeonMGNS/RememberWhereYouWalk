@@ -1,9 +1,10 @@
-from rememberwalk.utils.script_utils import dir_path,extract_and_save_actor,restore_ckpt,ckpt_dir
+from rememberwalk.utils.script_utils import dir_path,extract_and_save_actor,restore_ckpt
+from rememberwalk.utils.paths import CKPT_DIR
 from omegaconf import DictConfig, OmegaConf
 import hydra
 from rememberwalk.utils.generate_setup import generate_setup
 
-@hydra.main(version_base="1.3", config_path=f"{dir_path}/script/configs", config_name=None)
+@hydra.main(version_base="1.3", config_path="../configs", config_name=None)
 def main(cfg: DictConfig):
     if not cfg:
         raise ValueError("No config file specified.\n"
@@ -24,7 +25,7 @@ def main(cfg: DictConfig):
     visualizer_setup = setup["visualizer"]
     env_setup = setup["env"]
     training_setup = setup["training"]
-    ckpt_dir = f"{dir_path}/checkpoints/non_sweep"
+    ckpt_dir = f"{CKPT_DIR}/non_sweep"
     deployment_dir = f"{dir_path}/deployment_checkpoints/{visualizer_setup["deployment_name"]}"
     params = restore_ckpt(ckpt_dir,None,visualizer_setup)
     extract_and_save_actor(params,deployment_dir)
