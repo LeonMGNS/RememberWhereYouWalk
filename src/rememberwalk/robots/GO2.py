@@ -20,7 +20,6 @@ class GO2(BaseRobot):
         for i in range(self.model.actuator_actnum.shape[0]):
             self.actuators.append(self.model.actuator(i).name)
             self.actuators_id.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, self.model.actuator(i).name))
-            print(self.model.actuator(i).name)
 
         self.actuators_id = jnp.asarray(self.actuators_id)
 
@@ -47,7 +46,6 @@ class GO2(BaseRobot):
         self.actuator_joint_ids = []
         for act in self.actuators:
             joint_name = f"{act}_joint"
-            print(joint_name)
             joint_id = self.model.joint(joint_name).id
             self.actuator_joint_ids.append(joint_id)
             self.joint_limits.append(self.model.jnt_range[joint_id])
@@ -133,7 +131,6 @@ class GO2(BaseRobot):
             for sensor in self.sensor_names:
                 sensor_id = self.model.sensor(name=sensor)
                 self.sensor_ids.append(sensor_id.id)
-            print(self.sensor_ids)
             self.sensor_ids = jnp.array(self.sensor_ids, dtype=jnp.int32)
             self.sensor_start_adrs = self.model.sensor_adr[self.sensor_ids]
             self.sensor_dim = self.model.sensor_dim[self.sensor_ids]
@@ -181,7 +178,6 @@ class GO2(BaseRobot):
         self.feet_coll_groups = {}  #
         self.other_coll_groups = {}  #
         self.nominal_joint_positions = self.model.keyframe("home").qpos[7:]
-        print(self.nominal_joint_positions)
         self.initial_qpos = jnp.array(self.model.keyframe("home").qpos)
         self.stand_down_joint_positions = jnp.array(
             [

@@ -40,49 +40,6 @@ def render(eval_state,visualizer_config,env,renderer):
         renderer.update_scene(data, 0)
         return renderer.render()
 
-
-
-
-# def restore_ckpt(ckpt_dir,actor_critic,visualizer_config,put_cpu=True):
-#     options = ocp.CheckpointManagerOptions(max_to_keep=2, create=True)
-#     checkpointer = ocp.Checkpointer(ocp.PyTreeCheckpointHandler())
-#     checkpoint_manager = ocp.CheckpointManager(ckpt_dir,checkpointer, options)
-#     cpu_device = jax.devices("cpu")[0] 
-#     cpu_sharding = jax.sharding.SingleDeviceSharding(cpu_device)
-#     restore_args =  ocp.ArrayRestoreArgs( sharding=cpu_sharding, # explicit CPU sharding 
-#                                                     global_shape=None # optional, Orbax infers if not given # no RestoreType anymore 
-#                                                     )
-#     actor_optimizer = optax.chain(
-#         optax.clip_by_global_norm(1.0),  # Clip gradients with norm > 1.0
-#         optax.adam(learning_rate=4e-5, eps=1e-5)    
-#         )
-#     critic_optimizer = optax.chain(
-#             optax.clip_by_global_norm(1.0),  # Clip gradients with norm > 1.0
-#             optax.adam(learning_rate=1e-5, eps=1e-5)    
-#             )
-#     labels = visualizer_config["labels"]
-#     optimizer = optax.multi_transform(
-#             transforms={'actor':actor_optimizer,'critic':critic_optimizer},
-#             param_labels=labels,
-#     )
-#     training_state = visualizer_config["training_state"]
-    
-#     state_dict = serialization.to_state_dict(training_state)
-#     print(state_dict.keys())
-
-#     restore_args = orbax_utils.restore_args_from_target(state_dict)
-#     options = ocp.CheckpointManagerOptions(max_to_keep=2, create=True)
-#     checkpointer = ocp.Checkpointer(ocp.PyTreeCheckpointHandler())
-#     checkpoint_manager = ocp.CheckpointManager(ckpt_dir, checkpointer, options)
-#     restored = checkpoint_manager.restore(visualizer_config["policy"],restore_kwargs={'restore_args': restore_args})
-#     if restored is None:
-#         print("Given checkpoint was not found")
-#     elif put_cpu:
-#         return to_cpu(restored["params"])
-#     elif not put_cpu:
-#         return restored
-    
-
 def restore_ckpt(ckpt_dir, actor_critic, visualizer_config, put_cpu=True,new_keys_to_ignore=[]):
     # Get the state dictionary of your NEW structure 
     training_state = visualizer_config["training_state"]

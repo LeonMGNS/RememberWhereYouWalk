@@ -68,9 +68,7 @@ class ModelDR:
         self.default_gravity = model.opt.gravity[2]
         self.initial_lidar_geom_size = model.geom_size[self.robot.lidar_id, 0]
         self.default_timeconst = model.geom_solref[self.geom_size_indicies, 0]
-        print(self.default_damping)
-        print(self.default_stiffness)
-        #jax.debug.breakpoint()
+
 
 
 
@@ -90,12 +88,10 @@ class ModelDR:
         pair_friction = model.pair_friction.at[self.robot.pair_ids,:2].set(sampled_friction_tangential)
         pair_friction = pair_friction.at[self.robot.pair_ids,2].set(sampled_friction_torsional)
         pair_friction = pair_friction.at[self.robot.pair_ids,3:].set(sampled_friction_rolling)
-        #geom_friction = model.geom_friction.at[self.friction_indices].set(jnp.array([sampled_friction_tangential, sampled_friction_torsional, sampled_friction_rolling]).T)
 
 
         sampled_stiffness = self.default_stiffness * (1 + curr_coeff * jax.random.uniform(keys[3], minval=-self.stiffness_factor, maxval=self.stiffness_factor))
         sampled_damping = self.default_damping * (1 + curr_coeff * jax.random.uniform(keys[4], minval=-self.damping_factor, maxval=self.damping_factor))
-        #sampled_timeconst = jnp.maximum(self.default_timeconst * jnp.exp(curr_coeff * jax.random.uniform(keys[3], minval=-self.timeconst_log_range, maxval=self.timeconst_log_range, shape=self.default_timeconst.shape)), self.min_timeconst)
 
         pair_solref = model.pair_solref.at[self.robot.pair_ids,0].set(sampled_stiffness)
         pair_solref = model.pair_solref.at[self.robot.pair_ids,1].set(sampled_damping) 

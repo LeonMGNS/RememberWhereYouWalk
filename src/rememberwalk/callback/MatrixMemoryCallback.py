@@ -120,7 +120,6 @@ def visualizer_callback(action_jit,visualizer_dict:dict,key:jnp.ndarray) -> Tupl
     action,predicted_dsitribution,matrix_memory= action_jit(parameters,state.obs,state.height_obs,matrix_memory,state.noisy_true_pos.reshape((-1,3)))
     matrix_memory = jnp.where(state.done,jnp.ones_like(matrix_memory)*0.5,matrix_memory)
     matrix_memory_log = jnp.where(matrix_memory==0.0,jnp.zeros_like(matrix_memory),matrix_memory)
-    print(jnp.linalg.norm(state.pipeline_state.qvel[:2]))
     key,_ = jax.random.split(key)
     action = action[0]
     key,_ = jax.random.split(key)
