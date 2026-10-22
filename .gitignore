@@ -38,6 +38,10 @@ wandb_login_key.txt
 *.pkl
 !data/mazes/maze_only_desc_300000.pkl
 !data/mazes/maze_only_desc_100_eval.pkl
+!data/mazes/maze_only_desc_5000_eval.pkl
 
 # MuJoCo writes its warnings here
 MUJOCO_LOG.TXT
+
+# Cluster scripts (not published)
+*.sh
