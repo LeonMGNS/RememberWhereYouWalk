@@ -190,7 +190,7 @@ lidar:
   height_shadow_noise: 0.05
 
 domain_randomization:
-  randomization_prob: 0.0
+  randomization_prob: 0.001
   action_delay:
     max_nr_delay_steps: 1
     delay_probability: 0.05
@@ -323,8 +323,8 @@ training:
 
 eval:
   nr_eval_envs: 1000
-  file_eval_maze_nr: "only_desc_100_eval"
-  nr_eval_mazes: 100
+  file_eval_maze_nr: "only_desc_5000_eval"
+  nr_eval_mazes: 5000
   use_deterministic_eval: true
   evaluation_at_curriculum_steps_debug: [ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ]
   evaluation_at_curriculum_steps_prod: [ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ]

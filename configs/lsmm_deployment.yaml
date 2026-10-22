@@ -194,7 +194,7 @@ lidar:
   height_shadow_noise: 0.05
 
 domain_randomization:
-  randomization_prob: 0.0
+  randomization_prob: 0.001
   action_delay:
     max_nr_delay_steps: 3
     delay_probability: 0.05
