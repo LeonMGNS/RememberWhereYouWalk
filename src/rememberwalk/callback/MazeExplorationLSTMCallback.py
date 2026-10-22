@@ -70,10 +70,10 @@ def deterministic_eval_callback(actor_critic,eval_dict:dict,env:SimpleMazeEnv) -
     metrics = dict(state.metrics)
     metrics["bce_error"] =  bce_error
     metrics["bce_reward"] = bce_reward
-    metrics["cell_visits"] = state.cell_visits
-    metrics["predicted_distribution"] = predicted_distribution
-    metrics["true_distribution"] = state.maze_description
-    metrics["pos"] =  state.delta_pos
+    #metrics["cell_visits"] = state.cell_visits
+    #metrics["predicted_distribution"] = predicted_distribution
+    #metrics["true_distribution"] = state.maze_description
+    #metrics["pos"] =  state.delta_pos
     metrics["step"] = state.n_steps
     eval_dict["state"] = state
     eval_dict["lstm_state"]=updated_lstm_state
