@@ -17,24 +17,22 @@ dependencies = [
     "mujoco-mjx>=3.4.0",
     "numpy>=2.3",
     "scipy>=1.16",
-    "jaxkd>=0.1.2",
     "hydra-core>=1.3.2",
     "omegaconf>=2.3",
     "pyyaml>=6.0",
     "wandb>=0.23",
+    "opencv-python",
 ]
 
 [project.optional-dependencies]
 cuda = ["jax[cuda13]>=0.8.1"]
 vis = [
-    "opencv-python",
     "pillow",
     "matplotlib",
     "glfw",
     "pyopengl",
 ]
 experiments = [
-    "opencv-python",
     "matplotlib",
     "seaborn",
 ]
@@ -51,3 +49,19 @@ rememberwalk = ["assets/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: compiles and runs the environment (about a minute per config)",
+    "checkpoint: needs the trained checkpoints in checkpoints/",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["outputs", "scripts/outputs", "scripts/wandb", "checkpoints", "data"]
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle, import sorting, pyupgrade, bugbear
+select = ["F", "E", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["rememberwalk"]

@@ -1,7 +1,6 @@
 import mujoco
 from mujoco import viewer
 from mujoco import mjx
-import numpy as np
 
 
 class Viewer:
@@ -41,30 +40,3 @@ class Viewer:
         mujoco.mj_forward(self.model, self.state)
         self.viewer.sync()
     
-    def update_mujoco(self,sim_state):
-        self.state = sim_state
-        mujoco.mj_forward(self.model, self.state)
-        self.viewer.sync()
-
-        
-
-    def update_height_map(self, model, sim_state, height_map):
-
-        self.model = model
-        self.state.qpos = sim_state.qpos
-        self.state.qvel = sim_state.qvel
-        mujoco.mj_step(model, self.state)
-        self.viewer.user_scn.ngeom = 0
-        i = 0
-        for point in range(height_map.shape[0]):
-            mujoco.mjv_initGeom(
-                self.viewer.user_scn.geoms[i],
-                type=mujoco.mjtGeom.mjGEOM_SPHERE,
-                size=[0.02, 0, 0],
-                pos=height_map[point],
-                mat=np.eye(3).flatten(),
-                rgba=np.array([1, 0, 0, 1]),
-            )
-            i += 1
-        self.viewer.user_scn.ngeom = i
-        self.viewer.sync()

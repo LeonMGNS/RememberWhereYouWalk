@@ -2,9 +2,7 @@ import random
 import jax.numpy as jnp
 import pickle
 import numpy as np
-from rememberwalk.utils.script_utils import get_highest_maze_index
 from rememberwalk.utils.paths import MAZE_DIR
-import jax
 from copy import deepcopy
 class Maze:
 
@@ -201,31 +199,6 @@ class Maze:
                 
         return maze_edge_representation
     
-    def convert_maze_to_wall_tensor_new(self, maze):
-        """
-        Converts a bitmask maze to a (Rows, Cols, 2) tensor.
-        Index 0: North Wall
-        Index 1: East Wall
-        """
-        # 1. Create boolean masks for North and East walls across the whole grid
-        # If the North bit is NOT set, there is a wall (True)
-        north_walls = (jnp.array(maze) & self.N) == 0
-        east_walls = (jnp.array(maze) & self.E) == 0
-
-        # 2. Enforce "Internal Only" by removing the outer perimeter
-        # Row 0 North walls are the top outer boundary -> Set to False
-        north_walls = north_walls.at[0, :].set(False)
-        
-        # Last Column East walls are the right outer boundary -> Set to False
-        east_walls = east_walls.at[:, -1].set(False)
-
-        # 3. Stack them into (Rows, Cols, 2)
-        # Shape: (R, C, 2) where [..., 0] is North and [..., 1] is East
-        maze_edge_representation = jnp.stack([east_walls, north_walls], axis=-1)
-        
-        return maze_edge_representation.astype(jnp.int32) # or jnp.bool_
-    
-
     def print_maze_edge_representation(self,maze):
         rows, cols = self.maze_rows+1, self.maze_cols+1
         N, S, E, W, IN = self.N, self.S, self.E, self.W, self.IN
@@ -425,56 +398,54 @@ class Maze:
                     return True
                     
         return False
-    
 
 
+if __name__ == "__main__":
+    # Offline maze generation: run this file directly to (re)create the maze pickle files.
+    # Maze parameters
+    maze_rows = 5
+    maze_cols = 5
+    cell_visit_size_in_meters = 1.0
+    nr_mazes = 100
+    use_file_maze = True
+    file_maze_nr = "only_desc"
+    space_maze_cell=2.0
+    global_height_field_x_length_in_meters = nr_mazes * maze_rows * space_maze_cell
+    global_height_field_y_length_in_meters = maze_cols * space_maze_cell
+    distribution_size = int(2*(maze_cols+1)*(maze_rows+1))
+    exploration_min = 1.0
+    exploration_max= 1.0
+    local_height_field_x_length_in_meters = maze_rows * space_maze_cell
+    local_height_field_y_length_in_meters = maze_cols * space_maze_cell
+    height_field_resolution = 0.1
+
+    terrain_parameters = {
+        "height_field_resolution": height_field_resolution,
+        "local_height_field_x_length_in_meters": local_height_field_x_length_in_meters,
+        "local_height_field_y_length_in_meters": local_height_field_y_length_in_meters,
+        "height_field_x_length_in_meters": global_height_field_x_length_in_meters,
+        "height_field_y_length_in_meters": global_height_field_y_length_in_meters,
+        "cells_in_x": 50,
+        "cells_in_y": 50,
+        "wall_height": 0.5,
+        "length_in_x": 2.5,  # 4m from center to edge
+        "length_in_y": 2.5,  # 2m from center to edge ==> Overall 8m x 4m terrain map
+        "max_possible_height": 30,  # 30 m maximum possible height
+        "maze_rows": maze_rows,
+        "maze_cols": maze_cols,
+        "nr_mazes": nr_mazes,
+        "space_maze_cell":space_maze_cell,
+        "cell_visit_size_in_meters": cell_visit_size_in_meters,
+        "cell_visit_matrix_x_size": int((maze_rows*space_maze_cell)//cell_visit_size_in_meters),
+        "cell_visit_matrix_y_size": int((maze_cols*space_maze_cell)//cell_visit_size_in_meters),
+        "critic_max_pool_window_size": 2,
+        "maze_file": file_maze_nr,
+        "terrain_curr_coeff_window_size":0.15,
+        "wall_thickness":2,
+        }
 
 
-# Maze parameters
-maze_rows = 5
-maze_cols = 5
-cell_visit_size_in_meters = 1.0
-nr_mazes = 100
-use_file_maze = True
-file_maze_nr = "only_desc"
-space_maze_cell=2.0
-global_height_field_x_length_in_meters = nr_mazes * maze_rows * space_maze_cell
-global_height_field_y_length_in_meters = maze_cols * space_maze_cell
-distribution_size = int(2*(maze_cols+1)*(maze_rows+1))
-exploration_min = 1.0
-exploration_max= 1.0
-local_height_field_x_length_in_meters = maze_rows * space_maze_cell
-local_height_field_y_length_in_meters = maze_cols * space_maze_cell
-height_field_resolution = 0.1
-
-terrain_parameters = {
-    "height_field_resolution": height_field_resolution,
-    "local_height_field_x_length_in_meters": local_height_field_x_length_in_meters,
-    "local_height_field_y_length_in_meters": local_height_field_y_length_in_meters,
-    "height_field_x_length_in_meters": global_height_field_x_length_in_meters,
-    "height_field_y_length_in_meters": global_height_field_y_length_in_meters,
-    "cells_in_x": 50,
-    "cells_in_y": 50,
-    "wall_height": 0.5,
-    "length_in_x": 2.5,  # 4m from center to edge
-    "length_in_y": 2.5,  # 2m from center to edge ==> Overall 8m x 4m terrain map
-    "max_possible_height": 30,  # 30 m maximum possible height
-    "maze_rows": maze_rows,
-    "maze_cols": maze_cols,
-    "nr_mazes": nr_mazes,
-    "space_maze_cell":space_maze_cell,
-    "cell_visit_size_in_meters": cell_visit_size_in_meters,
-    "cell_visit_matrix_x_size": int((maze_rows*space_maze_cell)//cell_visit_size_in_meters),
-    "cell_visit_matrix_y_size": int((maze_cols*space_maze_cell)//cell_visit_size_in_meters),
-    "critic_max_pool_window_size": 2,
-    "maze_file": file_maze_nr,
-    "terrain_curr_coeff_window_size":0.15,
-    "wall_thickness":2,
-    }
-
-
-#maze_generator = Maze(terrain_parameters,True)
-# maze_generator.get_hand_crafted_maze()
-#maze_generator.generate_only_maze_description()
-#maze_generator.generate_eval_only_maze_description()
-
+    #maze_generator = Maze(terrain_parameters,True)
+    # maze_generator.get_hand_crafted_maze()
+    #maze_generator.generate_only_maze_description()
+    #maze_generator.generate_eval_only_maze_description()

@@ -1,6 +1,5 @@
 import mujoco
 from mujoco import mjx
-from mujoco.mjx import Model, Data
 import jax
 import jax.numpy as jnp
 
@@ -15,10 +14,6 @@ class BaseMJXEnv:
         self.physics_steps_per_env_step = parameters["physics_steps_per_env_step"]
         self.qpos_size = self.data.qpos.shape[0]
         self.qvel_size = self.data.qvel.shape[0]
-
-    def reset(self) -> tuple[Data, Model]:
-        self.robot.init_coll_ids(self.parameters["intial_state"].pipeline_state)
-        return 
 
     def step(self, state, action: jax.Array):
         """

@@ -2,13 +2,10 @@ import jax
 import jax.numpy as jnp
 import flax.linen as nn
 from flax.linen.initializers import constant, orthogonal
-import numpy as np
 from rememberwalk.actor_critic.BaseActorCritic import BaseActorCritic
 from rememberwalk.actor_critic.MLP import Actor,Critic,HeightEncoder
-from typing import Tuple
 import optax
 import flax
-from functools import partial
 @flax.struct.dataclass
 class Params:
     policy_parameters: jnp.ndarray
@@ -96,7 +93,6 @@ class MatrixMemoryEncoder(nn.Module):
         # Safely flatten the last 3 dimensions (H, W, C) regardless of batch/time dims
         y = y.reshape((y.shape[0], -1))
         # --- MLP Projection ---
-        # Normalizing BEFORE the dense layers (excellent placement)
         y = nn.LayerNorm()(y) 
         
         y = dense_layer(256)(y)
@@ -157,7 +153,6 @@ class ActorCritic(BaseActorCritic):
         # Init BaseActorCritic
         super().__init__()
         # Set object variables
-        self.actor_critic_dict = actor_critic_dict
         init_key = jax.random.PRNGKey(seed)
         init_keys = jax.random.split(init_key,16)
         self.actor_observation_size = actor_critic_dict["actor_observation_size"]
@@ -176,12 +171,6 @@ class ActorCritic(BaseActorCritic):
         self.matrix_memory_size = self.matrix_memory_shape[0] * self.matrix_memory_shape[1] * self.matrix_memory_shape[2]
         self.matrix_memory_feature_vector_size = actor_critic_dict["matrix_memory_feature_vector_size"]
         self.height_field_in_meters_shape = actor_critic_dict["height_field_in_meters_shape"]
-        self.height_field_resolution = actor_critic_dict["height_field_resolution"]
-        self.cross_attention_n_channels = actor_critic_dict["cross_attention_n_channels"]
-        self.cross_attention_num_heads = actor_critic_dict["cross_attention_num_heads"]
-        self.cross_attention_qkv_features = actor_critic_dict["cross_attention_qkv_features"]
-        self.maximum_loc_delta_pred = actor_critic_dict["maximum_loc_delta_pred"]
-        self.window_shape = jnp.array(self.matrix_memory_update_window_shape)
 
         #NN initialization
         # Init Actor
@@ -198,7 +187,6 @@ class ActorCritic(BaseActorCritic):
         self.init_height_encoder_nn_params = self.height_encoder.init(init_keys[7], jnp.zeros((1, self.height_sample_size)))
         
         self.init_critic_height_encoder_nn_params = self.critic_height_encoder.init(init_keys[8], jnp.zeros((1, self.critic_height_sample_size)))
-        self.sqrt_height_sample_size = jnp.sqrt(self.critic_height_sample_size).astype(jnp.int32)
 
         # Init Cross Entropy Head
         self.cross_entropy_head = CrossEntropyHead(int(self.distribution_size))
@@ -255,11 +243,9 @@ class ActorCritic(BaseActorCritic):
 
         visualizer_dict = {
         "matrix_memory": jnp.ones((1, self.matrix_memory_shape[0], self.matrix_memory_shape[1], self.matrix_memory_shape[2])) * 0.5,
-        "pred_pos":jnp.zeros((1,3)),
         "action": jnp.zeros((self.action_size,)),
         }
-        eval_dict = {"matrix_memory": jnp.ones((eval_cfg["nr_eval_envs"], self.matrix_memory_shape[0], self.matrix_memory_shape[1], self.matrix_memory_shape[2])) * 0.5,
-                     "pred_pos":jnp.zeros((eval_cfg["nr_eval_envs"],3))}
+        eval_dict = {"matrix_memory": jnp.ones((eval_cfg["nr_eval_envs"], self.matrix_memory_shape[0], self.matrix_memory_shape[1], self.matrix_memory_shape[2])) * 0.5}
         
         eval_dict["predicted_distribution"] = jnp.zeros((eval_cfg["nr_eval_envs"],self.distribution_size))
         eval_dict["pred_delta_loc"]= jnp.zeros((eval_cfg["nr_eval_envs"],3))

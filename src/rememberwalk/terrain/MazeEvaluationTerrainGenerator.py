@@ -60,10 +60,6 @@ class MazeEvaluationTerrainGenerator:
         return state, key
     
     def update_height_field(self,state,env:SimpleMazeEnv):
-        #old_state = state
-        #state,closest_idx = self.shift_on_initial_terrain(state,env)
-        #state = self.shift_robot_given_hfield_coords(state,closest_idx,env)
-        #state = jax.lax.cond((jnp.linalg.norm(old_state.pipeline_state.qpos[:2]) >10.0) | (old_state.done),lambda: state,lambda: old_state)
         return state
 
     def get_global_position_from_hfield_coords(self,coords:jnp.ndarray):
@@ -145,18 +141,6 @@ class MazeEvaluationTerrainGenerator:
         wall_west_cell = maze[current_cell[0],current_cell[1]-1,0]
         return jnp.array([wall_east_cell,wall_south_cell,wall_west_cell,wall_north_cell])
     
-    def get_maze_nr_from_global_hfield_idx_from_coord(self,coords:jnp.ndarray):
-        global_hfield_x_idx = coords[0]
-        maze_nr = global_hfield_x_idx // self.height_field_points_per_maze_in_x
-        return maze_nr
-    
-
-    def get_maze_nr_from_global_hfield_idx(self,state:MazeState):
-        global_hfield_x_idx = state.global_hfield_coords[0]
-        maze_nr = global_hfield_x_idx // self.height_field_points_per_maze_in_x
-        return maze_nr
-
-
     def reset_start_position(self, state:MazeState , env: SimpleMazeEnv, key: jnp.ndarray) -> tuple[MazeState, jnp.ndarray]:
         """
         Resets the start position of the terrain.

@@ -91,11 +91,7 @@ class MazeStaticGenerator:
     def shift_on_initial_terrain(self,state:MazeState,env:SimpleMazeEnv,key):
         closest_idxs = env.terrain_observation.get_hfield_coords_from_xpos(state.pipeline_state.qpos[:2].reshape(1,2)).reshape(-1)
         # Substract zero indicies so that we get deviation from [0,0] in the local height field and add this to the global index
-        #closest_idxs = closest_idxs - self.zero_indices
-        # global_idxs = state.global_hfield_coords
         maze_nr = state.maze_nr
-        # global_x_val = jnp.array([self.local_hf_field_half_length[0] * maze_nr,0])
-        # state = state.replace(global_hfield_coords=global_idxs)
         sampled_terrain_curr_coeff,key = self.sample_terrain_curriculum_level(state.terrain_curr_coeff,key)
         maze_edge_curriculum = jax.random.uniform(key,shape=(self.R+1,self.C+1,2)) <= sampled_terrain_curr_coeff
         maze_edge_curriculum = maze_edge_curriculum.at[0,:,1].set(True)
@@ -215,29 +211,6 @@ class MazeStaticGenerator:
         pos_shifted = pos + shift
         return (pos_shifted // cell_size).astype(jnp.int32)
     
-    def get_maze_nr_from_global_hfield_idx_from_coord(self,coords:jnp.ndarray):
-        global_hfield_x_idx = coords[0]
-        maze_nr = global_hfield_x_idx // self.height_field_points_per_maze_in_x
-        return maze_nr
-    
-
-    def get_maze_nr_from_global_hfield_idx(self,state:MazeState):
-        global_hfield_x_idx = state.global_hfield_coords[0]
-        maze_nr = global_hfield_x_idx // self.height_field_points_per_maze_in_x
-        return maze_nr
-
-    def get_valid_global_goal_position(self,state:MazeState,key):
-        maze_nr = state.maze_nr
-        global_robot_pos = self.get_global_position_from_hfield_coords(state.global_hfield_coords) + state.pipeline_state.qpos[:2]
-        global_valid_start_field_pos = self.get_global_position_from_hfield_coords_vectorized(self.valid_start_fields)
-        potential_start_states_mask = (self.valid_start_fields[:,0] >= (maze_nr * 2*self.local_hf_field_half_length[0])) & (self.valid_start_fields[:,0] <=  ((maze_nr +1)* 2*self.local_hf_field_half_length[0])) & (jnp.linalg.norm(global_robot_pos-global_valid_start_field_pos) > 2.5)
-        probs = potential_start_states_mask.astype(jnp.float32)
-        probs = probs / jnp.sum(probs)
-        valid_start_coords = jax.random.choice(key,self.valid_start_fields,p=probs,shape=())
-        goal_position = self.get_global_position_from_hfield_coords(valid_start_coords)
-        return goal_position
-
-
     def reset_start_position(self, state:MazeState , env: SimpleMazeEnv, key: jnp.ndarray) -> tuple[MazeState, jnp.ndarray]:
         """
         Resets the start position of the terrain.

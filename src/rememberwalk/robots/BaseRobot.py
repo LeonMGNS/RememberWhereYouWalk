@@ -25,5 +25,3 @@ class BaseRobot:
     def init_coll_ids(self, pipeline_state: mjx.Data):
         pass
 
-    def scale_action(self, action):
-        pass

@@ -1,7 +1,6 @@
 import jax.numpy as jnp
 from rememberwalk.env.BaseMJXEnv import BaseMJXEnv
 from rememberwalk.states.MazeState import MazeState
-import jax
 
 class SimpleMazeEnv(BaseMJXEnv):
 
@@ -13,27 +12,14 @@ class SimpleMazeEnv(BaseMJXEnv):
         self.terrain_parameters = parameters["terrain_parameters"]
         self.curr_coeff = parameters["initial_curr_coeff"]
         self.terrain_curr_coeff = parameters["initial_terrain_curr_coeff"]
-        self.mode = parameters["mode"]
-        self.save_observation_history = parameters["save_observation_history"]
-        if self.save_observation_history:
-            assert "observation_history_length" in parameters.keys()
-            self.observation_history_length = int(parameters["observation_history_length"])
         self.curr_coeff_delta = parameters["curr_coeff_delta"]
         self.max_curr_coeff = parameters["max_curr_coeff"]
         self.max_terrain_curr_coeff = parameters["max_terrain_curr_coeff"]
         self.episode_length = parameters["episode_length"]
-        self.episode_length_in_seconds = self.episode_length * self.physics_steps_per_env_step * self.model.opt.timestep
         self.actor_observation_size = parameters["actor_observation_size"]
-        self.critic_observation_size = parameters["critic_observation_size"]
         self.dt = self.model.opt.timestep * parameters["physics_steps_per_env_step"]
-        self.height_map_max_delay = parameters["height_map_max_delay"]
         self.action_size = int(parameters["actor_output_size"]/2)
-        self.nr_height_map_points = parameters["nr_height_map_points"]
-        self.critic_nr_height_map_points = parameters["critic_nr_height_map_points"]
-        self.max_allowed_loc_error = parameters["max_allowed_loc_error"]
-        self.initial_mjx_model = parameters["initial_mjx_model"]
 
-        # Defining reward parameters
         imports = parameters["imports"]
         # Defining needed environment functions
         self.get_obs = imports["get_obs"]
@@ -60,7 +46,6 @@ class SimpleMazeEnv(BaseMJXEnv):
         self.control_randomization = imports["DefaultDomainControl"]
         self.DelayAction = imports["DelayAction"]
         self.command_creater = imports["CommandCreator"]
-        self.MazeCellBasedRand = imports["MazeCellBasedRand"]
 
     def reset(self,inital_curr_coeff:jnp.ndarray,initial_terrain_curr_coeff, key: jnp.ndarray) -> MazeState:
         """
@@ -89,13 +74,12 @@ class SimpleMazeEnv(BaseMJXEnv):
 
     def step(self, state: MazeState, action: jnp.ndarray, key: jnp.ndarray):
 
-        #
         state,key = self.reset_variables(state, self,key)
         
         # Randomize State and Action
         state, action, key = self.randomize_state_action(state, action, self, key)
         
-        # Reset the state variables if needed
+        # PD control
         ctrl = self.pd_control.process_action(state.pipeline_state,
                                             action,
                                             state.extrinsic_p_gain_factor,

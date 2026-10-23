@@ -65,13 +65,8 @@ class InitStateRandomization:
             keys[7],
         )
         qpos = self.robot.initial_qpos
-        #linear_positions = pipeline_state.qpos[:3]
-        #qpos = qpos.at[:3].set(linear_positions)
         qpos = qpos.at[3:7].set(quaternion)
         qpos = qpos.at[self.robot.joint_qpos_adr].set(joint_positions)
-        # qvel = jnp.concatenate(
-        #     [linear_velocities, angular_velocities, joint_velocities]
-        # )
         qvel = jnp.zeros_like(pipeline_state.qvel)
         qvel = qvel.at[:3].set(linear_velocities)
         qvel = qvel.at[3:6].set(angular_velocities)
@@ -98,7 +93,6 @@ class InitStateRandomization:
         
         default_qpos = self.robot.initial_qpos
         default_qpos = new_pipeline_state.qpos.at[3:].set(default_qpos[3:])
-        #default_qpos = new_pipeline_state.qpos.at[2].add(0.3)
         default_qvel = jnp.zeros_like(qvel)
         tmp_data_2 = pipeline_state.replace(
             qpos=default_qpos, qvel=default_qvel, ctrl=jnp.zeros(self.robot.action_size)

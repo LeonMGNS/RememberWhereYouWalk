@@ -63,7 +63,6 @@ def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, tr
     critic_next   = transitions.critic_next_observation
     true_lin_vel  = transitions.linear_velocity
     true_dist     = transitions.true_distribution
-    true_pos      = transitions.delta_position
     noisy_true_pos= transitions.noisy_true_pos
 
     seq_len = ppo_trainer.actor_critic.window_sequence_length

@@ -26,9 +26,8 @@ import mujoco
 # it holds for any maze resolution -- not something to re-derive per model.
 # The eight ways a square grid can map onto a texture. The 1:1 write removes any
 # reordering *this module* does, but it cannot remove MuJoCo's own convention
-# for which corner of the hfield the first texel lands on. Run calibrate() once
-# to find out which of these you need; a maze boundary frame is invariant under
-# all eight, so a correct-looking border proves nothing.
+# for which corner of the hfield the first texel lands on. A maze boundary frame
+# is invariant under all eight, so a correct-looking border proves nothing.
 ORIENTS = {
     "identity":       lambda m: m,
     "flip_rows":      lambda m: m[::-1],
@@ -38,14 +37,6 @@ ORIENTS = {
     "rot90":          lambda m: np.rot90(m),
     "rot270":         lambda m: np.rot90(m, 3),
     "anti_transpose": lambda m: np.rot90(m, 2).T,
-}
-
-# Distinct palette colours for the calibration render
-CAL_COLORS = {
-    "A": (222, 143, 5),     # orange
-    "B": (86, 180, 233),    # sky blue
-    "C": (2, 158, 115),     # green
-    "D": (213, 94, 0),      # vermillion
 }
 
 # seaborn "colorblind" palette
@@ -173,122 +164,4 @@ class MazePainter:
         self._last = None
         return True
 
-    def paint_mask(self, model, mask, renderer=None, viewer=None):
-        """Paint from an explicit wall mask, when the height threshold is
-        unreliable (e.g. strong terrain roughness). Any shape is accepted as
-        long as it holds nrow*ncol values in hfield_data order."""
-        self._write(model, np.asarray(mask, bool).ravel())
-        self._upload(model, renderer, viewer)
-        self._last = None
-        return True
 
-    # -- diagnostics --------------------------------------------------------
-    def diagnose(self, model, geom_name="floor"):
-        """Print every link between hfield_data and the pixels on screen."""
-        h = np.asarray(model.hfield_data[self.hadr:self.hadr + self.n])
-        print("=== MazePainter diagnose ===")
-        print(f"hfield {self.nrow}x{self.ncol} adr={self.hadr}  "
-              f"min={h.min():.6g} max={h.max():.6g} nonzero={int((h != 0).sum())}")
-        if h.max() <= 0:
-            print("  !! max <= 0: no maze in model.hfield_data. The paint call runs "
-                  "before the terrain is copied in, or on a different model object.")
-        else:
-            print(f"  mask: {self.wall_flat(model).mean():.1%} of cells are wall "
-                  f"(threshold {self.rel_threshold * h.max():.6g})")
-        print(f"texture id={self.tid} {self.W}x{self.H} nch={self.nch} adr={self.tadr} "
-              f"-> 1:1 with {self.n} hfield cells")
-
-        gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
-        if gid < 0:
-            print(f"  !! no geom named {geom_name!r}")
-            return
-        mid = int(model.geom_matid[gid])
-        if mid < 0:
-            print(f"geom {geom_name!r}: NO material -- the texture can never show")
-            return
-        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MATERIAL, mid)
-        texid = [int(t) for t in np.atleast_1d(np.asarray(model.mat_texid[mid]))]
-        print(f"geom {geom_name!r}: material {name!r} texid slots={texid} "
-              f"-> uses this texture: {self.tid in texid}")
-        if self.tid not in texid:
-            print("  !! the floor material does not reference this texture; "
-                  "painting it can have no visible effect")
-        print(f"  texrepeat={model.mat_texrepeat[mid]} texuniform={model.mat_texuniform[mid]}")
-
-        tex = model.tex_data[self.tadr:self.tadr + self.n * self.nch].reshape(-1, self.nch)
-        cols, cnt = np.unique(tex, axis=0, return_counts=True)
-        print("texture contents:")
-        for c, k in sorted(zip(cols.tolist(), cnt.tolist()), key=lambda t: -t[1])[:4]:
-            print(f"   {tuple(int(v) for v in c)}  {k / self.n:.1%}")
-
-    # -- orientation calibration -------------------------------------------
-    def calibrate(self, model, renderer=None, viewer=None):
-        """Paint the four index quadrants in four colours, plus a white square
-        at index (0,0). Render once from directly above and read off where each
-        colour landed; the table printed below turns that into an orient value.
-        """
-        q = np.empty((self.nrow, self.ncol, 3), np.uint8)
-        r2, c2 = self.nrow // 2, self.ncol // 2
-        q[:r2, :c2] = CAL_COLORS["A"]
-        q[:r2, c2:] = CAL_COLORS["B"]
-        q[r2:, :c2] = CAL_COLORS["C"]
-        q[r2:, c2:] = CAL_COLORS["D"]
-        mark = max(self.nrow // 12, 2)
-        q[:mark, :mark] = (255, 255, 255)          # index (0,0)
-
-        buf = np.zeros((self.n, self.nch), np.uint8)
-        buf[:, :3] = q.reshape(-1, 3)
-        if self.nch == 4:
-            buf[:, 3] = 255
-        model.tex_data[self.tadr:self.tadr + self.n * self.nch] = buf.ravel()
-        self._upload(model, renderer, viewer)
-        self._last = None
-
-        print("calibration painted:")
-        print("   WHITE square = hfield index (0,0)")
-        print("   BLUE  block  = same rows as white, higher COLUMN index")
-        print("                  -> shows which screen direction +column runs")
-        print("   GREEN block  = same cols as white, higher ROW index")
-        print("                  -> shows which screen direction +row runs")
-        print("Prefer sweep_orients(): it renders all eight and you just pick "
-              "the one where the colour sits on the walls.")
-        return q
-
-
-def sweep_orients(painter, model, render_fn, out_dir="orient_sweep",
-                  renderer=None, viewer=None):
-    """Render the maze once per orientation and save each to a PNG.
-
-    No reasoning about axis conventions: exactly one of the eight images will
-    have the orange sitting on the walls instead of beside them. Use that name.
-
-        from maze_visual_runtime import sweep_orients
-        sweep_orients(self.maze_painter, self.env.model,
-                      lambda: render(state, self.visualizer_config,
-                                     self.env, self.renderer),
-                      renderer=self.renderer)
-
-    render_fn must return an HxWx3 uint8 array.
-    """
-    import os
-    os.makedirs(out_dir, exist_ok=True)
-    saved, original = [], painter.orient
-    try:
-        for name in ORIENTS:
-            painter.orient = name
-            painter.paint(model, renderer=renderer, viewer=viewer, force=True)
-            img = np.asarray(render_fn())
-            path = os.path.join(out_dir, f"{name}.png")
-            try:
-                from PIL import Image
-                Image.fromarray(img.astype(np.uint8)).save(path)
-            except ImportError:
-                import cv2
-                cv2.imwrite(path, img[..., ::-1])
-            saved.append(path)
-            print(f"  wrote {path}")
-    finally:
-        painter.orient = original
-    print(f"\nOpen the {len(saved)} images and pick the one where the orange "
-          f"lands ON the walls, then pass that name as orient=.")
-    return saved

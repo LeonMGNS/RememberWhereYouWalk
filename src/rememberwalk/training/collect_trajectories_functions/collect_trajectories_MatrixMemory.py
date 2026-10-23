@@ -4,7 +4,6 @@ from rememberwalk.states.MazeState import MazeState
 from rememberwalk.training.ppo import PPOTrainer
 from rememberwalk.training.collect_trajectories_functions.linear_velocity_target import linear_velocity_target
 import jax
-from typing import Tuple
 import optax
 
 def collect_trajectories(ppo_trainer:PPOTrainer,env_state:MazeState,training_state:TrainingState,key):

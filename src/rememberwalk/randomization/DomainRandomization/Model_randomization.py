@@ -162,8 +162,6 @@ class ModelDR:
             self.joint_friction_loss_max,
             keys[14],
         )
-        # geom_solref = model.geom_solref.at[:, 0].set(sampled_stiffness)
-        # geom_solref = geom_solref.at[:, 1].set(sampled_damping)
         body_ipos = model.body_ipos.at[1].set(sampled_trunk_ipos)
         geom_size = model.geom_size.at[self.geom_size_indicies, 0].set(
             sampled_feet_size

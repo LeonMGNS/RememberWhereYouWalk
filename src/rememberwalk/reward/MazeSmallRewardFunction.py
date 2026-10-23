@@ -2,7 +2,6 @@ import jax.numpy as jnp
 from rememberwalk.states.MazeState import MazeState
 from rememberwalk.env.SimpleMazeEnv import SimpleMazeEnv
 from jax.scipy.spatial.transform import Rotation
-import jax
 
 class MazeReward:
        
@@ -50,7 +49,6 @@ class MazeReward:
             self.centering_coeff = self.dt * reward_parameters["centering_coeff"]
             self.joint_velocity_limit_coeff = self.dt * reward_parameters["joint_velocity_limit_coeff"]
             self.power_draw_frac_penalty_coeff = self.dt * reward_parameters["power_draw_frac_penalty_coeff"] 
-            self.cell_neighbor_offsets = jnp.array([ [-1, -1], [-1, 0], [-1, 1], [ 0, -1], [ 0, 1], [ 1, -1], [ 1, 0], [ 1, 1], ])
             self.joint_actuator_force_limited = robot.model.actuator_forcelimited[robot.actuators_id]
             self.joint_actuator_joint_force_limited = robot.model.jnt_actfrclimited[robot.actuator_joint_ids]
             
@@ -204,7 +202,6 @@ class MazeReward:
 
 
         # Cell Visit Reward (Groundtrugh "intrinsic" motivation for new cells)
-        sqrt_curr_coeff = jnp.sqrt(curriculum_coeff)
         state,nr_cell_visited,current_cell_ids = self.update_cell_visists(state,env)
         
         cell_visit_reward =   (self.cell_visit_reward * jnp.exp(-(nr_cell_visited/200)))
@@ -225,13 +222,7 @@ class MazeReward:
         close_to_wall_reward = -1 * self.close_to_wall_reward * (min_height_field_xpos_distance<0.35) * jnp.exp(-5*(min_height_field_xpos_distance-0.15))    
 
         # Bias Cell reward
-        current_neighbor_ids = self.cell_neighbor_offsets + current_cell_ids
-        out_of_bounce_mask = (current_neighbor_ids[:,0] >= 0) & (current_neighbor_ids[:,0] < state.cell_visits.shape[0]) & (current_neighbor_ids[:,1] >= 0) & (current_neighbor_ids[:,1] < state.cell_visits.shape[1])
-        clipped_ids = jnp.clip(current_neighbor_ids,jnp.array([0, 0]), jnp.array([state.cell_visits.shape[0]-1, state.cell_visits.shape[1]-1]))
-        not_visited_mask = state.cell_visits == 0
-        zero_visit_mask = not_visited_mask.reshape((-1,1))
         neighbor_positions = env.terrain_generator.cell_center_positions
-        #neighbor_positions = jnp.flipud(neighbor_positions)
         walls_tensor = env.terrain_generator.check_walls_between_cell_and_neighbors(state.maze_description,current_cell_ids)
         old_neighbor_positions_distances = jnp.linalg.norm(neighbor_positions-state.pipeline_state.qpos[:2],axis=-1) + state.cell_visits
         neighbor_positions_distances = jnp.ones_like(old_neighbor_positions_distances)* 1000
@@ -306,7 +297,6 @@ class MazeReward:
                                     )
         
         reward = jnp.clip(base_reward + always_active_penalty,0) + alive_unclipped_reward
-        #reward = base_reward + always_active_penalty + still_alive_reward
 
         info = {
             "reward": reward,
@@ -326,7 +316,6 @@ class MazeReward:
             "linear_velocity_reward": linear_velocity_reward,
             "air_time_reward": air_time_reward,
             "angular_position_reward": angular_position_reward,
-            "terrain_curr_coeff":state.terrain_curr_coeff,
             "cell_visit_reward": cell_visit_reward,
             "bias_cell_reward":bias_cell_reward,
             "stall_reward": stall_reward,
@@ -378,9 +367,3 @@ class MazeReward:
         updated_cell_visits = jnp.where((((state.n_steps % self.update_step_for_cell_visit)==0)) * jnp.ones_like(new_cell_visits),new_cell_visits,state.cell_visits)
         state = state.replace(cell_visits=updated_cell_visits)
         return state, nr_visits,current_cell_idcs
-    
-
-    def binary_cross_entropy_computation(self,state:MazeState):
-          bce_loss = state.true_distribution * jnp.log((state.predicted_distribution + 1e-6)) + (1-state.true_distribution) * jnp.log(((1-state.predicted_distribution)+1e-6))
-          bce_loss = - jnp.mean(bce_loss)
-          return bce_loss

@@ -32,7 +32,6 @@ imports:
   pertubation_randomization_handler: "randomization.DomainRandomization.Pertubation_Randomization.DefaultDomainPerturbation"
   control_randomization_handler: "randomization.DomainRandomization.Control_randomization.DefaultDomainControl"
   delay_action_handler: "randomization.DomainRandomization.Action_delay_randomization.DelayAction"
-  maze_cell_based_rand_handler: "randomization.DomainRandomization.MazeCellBasedRandomization.MazeCellDR"
 
   # Training imports
   loss_fn: "training.loss_functions.transformer_loss.loss_fn"
@@ -42,7 +41,6 @@ imports:
   # Callback imports
   visualizer_callback: "callback.MazeExplorationTransformerCallback.visualizer_callback"
   deterministic_eval_callback: "callback.MazeExplorationTransformerCallback.deterministic_eval_callback"
-  probabilistic_eval_callback: "callback.MazeExplorationTransformerCallback.probabilistic_eval_callback"
   experiment_callback: "callback.MazeExplorationTransformerCallback.experiment_callback"
 
 env:
@@ -325,6 +323,5 @@ eval:
   nr_eval_envs: 1000
   file_eval_maze_nr: "only_desc_5000_eval"
   nr_eval_mazes: 5000
-  use_deterministic_eval: true
   evaluation_at_curriculum_steps_debug: [ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ]
   evaluation_at_curriculum_steps_prod: [ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 ]

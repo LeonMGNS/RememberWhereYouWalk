@@ -9,7 +9,7 @@ import time
 import mujoco
 from rememberwalk.utils.Viewer import Viewer
 from rememberwalk.utils.paths import CKPT_DIR
-from rememberwalk.utils.script_utils import dir_path, generate_unique_path,update_maze_figure,restore_ckpt,render
+from rememberwalk.utils.script_utils import dir_path, generate_unique_path,restore_ckpt,render
 from flax.training import orbax_utils
 from flax import serialization
 from rememberwalk.actor_critic.Transformer import TrainingState as TrainingStateTransformer
@@ -146,7 +146,6 @@ class Visualizer:
         
 
         viewer = Viewer(self.env.model, pipeline_state,render_callback=self.key_callback)
-        #self.maze_painter.calibrate(self.env.model, viewer=viewer.viewer)
         counter = 0
         while viewer.viewer.is_running():
             if counter == 0:

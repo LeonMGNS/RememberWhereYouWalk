@@ -1,24 +1,7 @@
 import jax.numpy as jnp
 
 
-
-
 class BaseActorCritic:
-
-    def __init__(self):
-        pass
-
-    def sample_action(self):
-        pass
-
-    def get_deterministic_action():
-        pass
-
-    def evaluate_actions():
-        pass
-
-    def log_prob_from_observation():
-        pass
 
     def log_prob(self, actions, loc, scale):
         log_unnormalized = -0.5 * jnp.square((actions - loc) / scale)

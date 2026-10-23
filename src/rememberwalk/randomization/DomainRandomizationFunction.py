@@ -2,7 +2,6 @@ from rememberwalk.env.SimpleMazeEnv import SimpleMazeEnv
 from rememberwalk.states.MazeState import MazeState
 import jax
 import jax.numpy as jnp
-from scipy.spatial.transform import Rotation as R
 
 
 def randomize_state_action(state: MazeState,

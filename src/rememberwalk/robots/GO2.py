@@ -3,8 +3,6 @@ from rememberwalk.utils.paths import ASSETS_DIR
 import mujoco
 import jax.numpy as jnp
 import mujoco.mjx as mjx
-from scipy.spatial.transform import Rotation
-from jax.scipy.spatial.transform import Rotation as jax_rot
 from copy import deepcopy
 
 
@@ -117,23 +115,6 @@ class GO2(BaseRobot):
         )  #
         self.base_geom_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "base_coll_geom",
                                               )
-        if model == "mjx_plot":
-            self.height_plot_ids = []
-            ids = jnp.arange(1, 785, 1)
-            for i in range(ids.shape[0]):
-                self.height_plot_ids.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f"grid_point_{ids[i]}"))
-
-            self.height_plot_ids = jnp.array(self.height_plot_ids)
-
-        if model == "mjx_hfield" or model == "mjx_hfield_vis":
-            self.sensor_names = ["FR_foot_force_sensor", "FL_foot_force_sensor", "RR_foot_force_sensor", "RL_foot_force_sensor"]
-            self.sensor_ids = []
-            for sensor in self.sensor_names:
-                sensor_id = self.model.sensor(name=sensor)
-                self.sensor_ids.append(sensor_id.id)
-            self.sensor_ids = jnp.array(self.sensor_ids, dtype=jnp.int32)
-            self.sensor_start_adrs = self.model.sensor_adr[self.sensor_ids]
-            self.sensor_dim = self.model.sensor_dim[self.sensor_ids]
         self.contact_ids = []
         self.geom_feet_ids = jnp.array(self.geom_ids[:4])
         self.non_feet_geom_ids = []
@@ -217,8 +198,6 @@ class GO2(BaseRobot):
         self.p_gain = 20  #
         self.d_gain = 0.5  #
         self.nominal_trunk_z = 0.325  #
-        if model == "mjx_hfield_low":
-            self.nominal_trunk_z = 0.27
         self.leg_distance = 0.28  #
         self.scaling_factor = 0.3
 

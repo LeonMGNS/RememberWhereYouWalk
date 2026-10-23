@@ -2,13 +2,9 @@
 import jax
 import jax.numpy as jnp
 from rememberwalk.env.BaseMJXEnv import BaseMJXEnv
-from rememberwalk.states.MazeState import MazeState
 import optax
-from rememberwalk.actor_critic.MLP import ActorCritic,TrainingState,Transition,Params
-from rememberwalk.utils.script_utils import dir_path, generate_unique_path, get_dir_and_run_for_checkpointing
+from rememberwalk.utils.script_utils import dir_path
 import wandb
-import mujoco
-from mujoco import mjx
 from copy import deepcopy
 import orbax.checkpoint as ocp
 from flax import serialization
@@ -64,9 +60,7 @@ class PPOTrainer:
         self.evaluation_at_curriculum_steps = training_config["evaluation_at_curriculum_steps"]
         self.nr_eval_envs = training_config["nr_eval_envs"]
         self.deterministic_eval_callback = training_config["deterministic_eval_callback"]
-        self.probabilistic_eval_callback = training_config["probabilistic_eval_callback"]
         self.eval_dict = training_config["eval_dict"]
-        self.use_deterministic_eval = training_config["use_deterministic_eval"]
 
         # Init Objects needed in trainer
         options = ocp.CheckpointManagerOptions(max_to_keep=2, create=True)
@@ -87,26 +81,20 @@ class PPOTrainer:
         if self.debug:
             self.jitted_training_epoch = self.training_epoch
             self.jitted_reset_function = self.environment.reset
-            if self.use_deterministic_eval:
-                self.evaluation_function = self.run_deterministic_evaluation
-            else:
-                self.evaluation_function = self.run_probablilistic_evaluation
+            self.evaluation_function = self.run_deterministic_evaluation
         else:
             self.jitted_training_epoch = jax.jit(self.training_epoch, static_argnums=())
             self.jitted_reset_function = jax.jit(self.environment.reset,static_argnums=())
-            if self.use_deterministic_eval:
-                self.evaluation_function = jax.jit(self.run_deterministic_evaluation,static_argnums=())
-            else:
-                self.evaluation_function = jax.jit(self.run_probablilistic_evaluation,static_argnums=())
+            self.evaluation_function = jax.jit(self.run_deterministic_evaluation,static_argnums=())
 
 
-    def save_ckpt(self, state: TrainingState, step: int):
+    def save_ckpt(self, state, step: int):
         if self.checkpoint_manager.latest_step() == int(step):
             return
         state_dict = serialization.to_state_dict(state)
         self.checkpoint_manager.save(int(step), state_dict)
 
-    def save_secured_ckpt(self, state: TrainingState, step: int):
+    def save_secured_ckpt(self, state, step: int):
         state_dict = serialization.to_state_dict(state)
         self.secured_checkpoint_manager.save(int(step), state_dict)
 
@@ -119,14 +107,6 @@ class PPOTrainer:
         key, _ = jax.random.split(key)
         env_state = jax.vmap(self.jitted_reset_function,(None,None,0))(self.environment.parameters["initial_curr_coeff"],self.environment.parameters["initial_terrain_curr_coeff"],reset_keys)
 
-        #Init additional metrics
-        # env_state.metrics["scale"] = jnp.zeros_like(env_state.metrics["reward"])
-        # env_state.metrics["auxiliary_reward"] = jnp.zeros_like(env_state.metrics["reward"])
-        # env_state.metrics["max_loc_error"] = jnp.zeros_like(env_state.metrics["reward"])
-        # env_state.metrics["avg_loc_error"] = jnp.zeros_like(env_state.metrics["reward"])
-        # env_state.metrics["use_pred_loc"] = env_state.use_pred_loc
-        # env_state.metrics["loc_log_distribution"] = jnp.zeros((self.nr_envs,self.actor_critic.di))
-       
         #Init training loop carry
         training_state = self.initial_training_state
         carry = (env_state, training_state, key)
@@ -221,7 +201,7 @@ class PPOTrainer:
         )
         return (new_training_state, transitions,kl_div_stop,key), metrics
 
-    def optimize(self, training_state: TrainingState, transitions: Transition, key):
+    def optimize(self, training_state, transitions, key):
         def process_transitions(transitions):
             transitions = jnp.swapaxes(transitions, 0, 1)
             shuffled_transitions = jax.random.permutation(key, transitions,axis=0)
@@ -261,36 +241,6 @@ class PPOTrainer:
         
         (eval_dict,states_already_terminated,episode_lengths,summed_rewards,key), metrics = jax.lax.scan(eval_step, (eval_dict,states_already_terminated,episode_lengths,summed_rewards, key), None, length=self.environment.episode_length)
         return metrics,episode_lengths,summed_rewards
-    def run_probablilistic_evaluation(self,parameters:Params,key:jnp.ndarray):
-        eval_reset_keys = jax.random.split(key, self.nr_eval_envs)
-        key, _ = jax.random.split(key)
-        eval_env_state = jax.vmap(self.jitted_reset_function)(eval_reset_keys)
-        eval_dict = self.eval_dict
-        eval_dict["state"] = eval_env_state
-        eval_dict["parameters"] = parameters
-        eval_dict["action"] = jnp.zeros((self.nr_eval_envs,self.actor_critic.action_size))
-        states_already_terminated = jnp.zeros((self.nr_eval_envs,),dtype=jnp.int32)
-        episode_lengths = jnp.zeros((self.nr_eval_envs,),dtype=jnp.int32)
-        summed_rewards = jnp.zeros((self.nr_eval_envs,),dtype=jnp.float32)
-        def eval_step(carry, _):
-            eval_dict,state_already_terminated,episode_length,summed_reward, key = carry
-            eval_dict,metrics,key = self.probabilistic_eval_callback(self.actor_critic,eval_dict,self.environment,key)
-            state_keys=jax.random.split(key,self.nr_eval_envs)
-            next_state,state_keys = jax.vmap(self.environment.step)(eval_dict["state"],eval_dict["action"],state_keys)
-            eval_dict["state"] = next_state
-            episode_length = jnp.where(state_already_terminated,episode_length,next_state.n_steps)
-            metrics.update(next_state.metrics)
-            masked_metrics = jax.tree_util.tree_map(
-                lambda metric: jnp.where(state_already_terminated, 0.0, metric),
-                metrics
-            )
-            just_finished = ((eval_dict["state"].done | (eval_dict["state"].n_steps >= 3499)) & (~state_already_terminated.astype(jnp.bool_)))
-            summed_reward = jnp.where(just_finished, eval_dict["state"].summed_reward, summed_reward)
-            state_already_terminated = jnp.where(eval_dict["state"].done, jnp.ones_like(state_already_terminated), state_already_terminated)
-            return (eval_dict,state_already_terminated,episode_length,summed_reward,state_keys[-1]), masked_metrics
-        (eval_dict,states_already_terminated,episode_lengths,summed_rewards,key), metrics = jax.lax.scan(eval_step, (eval_dict,states_already_terminated,episode_lengths,summed_rewards, key), None, length=self.environment.episode_length)
-        return metrics,episode_lengths,summed_rewards
-
 
     def compute_training_metrics(self, metrics: dict, summed_reward, episode_length,eval_key):
         result = {}

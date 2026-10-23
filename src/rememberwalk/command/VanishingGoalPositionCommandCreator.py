@@ -9,14 +9,11 @@ class StaticMazeCommandCreator:
 
     def __init__(self, terrain_parameters):
 
-        self.change_vel_prob = 0.004
-        self.zero_vel_prob = self.change_vel_prob * 0.25
         self.terrain_parameters = terrain_parameters
 
 
 
     def update_command(self, state: MazeState, env: SimpleMazeEnv, key: jnp.ndarray) -> tuple[MazeState, jnp.ndarray]:        
-        goal_position = state.goal_position
         xyz = state.pipeline_state.qpos[:3]
         quat = state.pipeline_state.qpos[3:7]
         rot = R.from_quat(

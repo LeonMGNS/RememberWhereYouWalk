@@ -162,11 +162,9 @@ class ActorCritic(BaseActorCritic):
         init_keys = jax.random.split(init_key, 9)
         self.actor_observation_size = actor_observation_size
         self.value_observation_size = value_observation_size
-        self.actor_output_ize = actor_output_size
         self.action_size = int(actor_output_size / 2)
         self.height_sample_size = height_sample_size
         self.critic_height_sample_size = critic_height_sample_size
-        self.memory_buffer_size = int(self.actor_observation_size + self.height_sample_size)
         self.transformer_sequence_length = transformer_sequence_length
         self.transformer_input_size = self.actor_observation_size + height_encoder_size + 3 + 3
         self.transformer_encoded_size = transformer_encoded_size
@@ -195,7 +193,6 @@ class ActorCritic(BaseActorCritic):
         self.critic_height_encoder = HeightEncoder(height_encoder_size=2 * height_encoder_size, layer_sizes=critic_height_encoder_layer_sizes)
         self.init_height_encoder_nn_params = self.height_encoder.init(init_keys[7], jnp.zeros((1, height_sample_size)))
         self.init_critic_height_encoder_nn_params = self.critic_height_encoder.init(init_keys[8], jnp.zeros((1, critic_height_sample_size)))
-        self.sqrt_height_sample_size = jnp.sqrt(critic_height_sample_size).astype(jnp.int32)
 
         # Init Transformer
         self.transformer_encoder = Encoder(transformer_n_layers, transformer_n_heads, transformer_hidden_size, transformer_encoded_size, self.transformer_memory_output_features)

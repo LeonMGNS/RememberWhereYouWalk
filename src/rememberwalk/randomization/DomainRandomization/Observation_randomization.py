@@ -50,15 +50,8 @@ class ObsDR:
             maxval=self.gravity_vector_noise,
         )
 
-        trunk_linear_velocity_noise = jax.random.uniform(
-            keys[4],
-            (3,),
-            minval=-self.gravity_vector_noise,
-            maxval=self.gravity_vector_noise,
-        )
         obs = obs.at[self.joint_position_ids].add(joint_position_noise)
         obs = obs.at[self.joint_vel_ids].add(joint_velocity_noise)
-        #obs = obs.at[self.linear_velocity_ids].add(trunk_linear_velocity_noise)
         obs = obs.at[self.angular_velocity_ids].add(trunk_angular_velocity_noise)
         obs = obs.at[self.projected_gravity_vector_ids].add(gravity_vector_noise)
         return obs, keys[-1]

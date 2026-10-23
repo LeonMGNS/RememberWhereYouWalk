@@ -1,7 +1,6 @@
 import jax.numpy as jnp
 from rememberwalk.states.MazeState import MazeState
 from rememberwalk.env.SimpleMazeEnv import SimpleMazeEnv
-import jax
 
 def update_curriculum(state: MazeState, env: SimpleMazeEnv) -> SimpleMazeEnv:
     """

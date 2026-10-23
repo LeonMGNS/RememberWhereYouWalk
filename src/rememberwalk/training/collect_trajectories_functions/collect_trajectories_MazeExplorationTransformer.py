@@ -14,7 +14,6 @@ def collect_trajectories(ppo_trainer: PPOTrainer, env_state: MazeState , trainin
         #Unpack Carry
         old_state, key = carry
         obs_history = old_state.observation_history
-        curr_coeff = old_state.curr_coeff.reshape(-1, 1)
 
         # Sample action
         action,scale, log_prob, height_encoded,predicted_distribution,pred_linear_vel = ppo_trainer.actor_critic.sample_action(

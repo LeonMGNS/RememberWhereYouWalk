@@ -4,7 +4,6 @@ from rememberwalk.states.MazeState import MazeState
 from rememberwalk.training.ppo import PPOTrainer
 from rememberwalk.training.collect_trajectories_functions.linear_velocity_target import linear_velocity_target
 import jax
-from typing import Tuple
 import optax
 
 def collect_trajectories(ppo_trainer:PPOTrainer,env_state:MazeState,training_state:TrainingState,key):
@@ -73,15 +72,6 @@ def collect_trajectories(ppo_trainer:PPOTrainer,env_state:MazeState,training_sta
     transitions, training_metrics, summed_reward, episode_length = output
     key, new_key= jax.random.split(key)
     return env_state,training_state ,new_key, transitions, training_metrics, summed_reward, episode_length
-
-
-def compute_localization_error_vector(ppo_trainer:PPOTrainer,last_error_vector:jnp.ndarray,curr_coeff:jnp.ndarray,key:jnp.ndarray):
-    drift_damping = ppo_trainer.training_config["drift_damping"]
-    drift_noise = ppo_trainer.training_config["drift_noise"]
-    drift_initial_noise_scaling = ppo_trainer.training_config["drift_initial_noise_scaling"]
-    error_vector  = (1-drift_damping) * last_error_vector + (drift_initial_noise_scaling + curr_coeff[:,None]*(1-drift_initial_noise_scaling)) *drift_noise * jax.random.normal(key,last_error_vector.shape)
-    key,_ = jax.random.split(key)
-    return error_vector,key
 
 
 def compute_bce_reward(ppo_trainer, predicted_distribution, true_distribution):

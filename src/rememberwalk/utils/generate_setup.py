@@ -61,9 +61,7 @@ def generate_setup(config_dict: dict) -> dict:
     PDControl = _resolve_import(imports_cfg.get("control_handler"))
     visualizer_callback = _resolve_import(imports_cfg.get("visualizer_callback"))
     deterministic_eval_callback = _resolve_import(imports_cfg.get("deterministic_eval_callback"))
-    probabilistic_eval_callback = _resolve_import(imports_cfg.get("probabilistic_eval_callback"))
     experiment_callback = _resolve_import(imports_cfg.get("experiment_callback"))
-    MazeCellBasedRand = _resolve_import(imports_cfg.get("maze_cell_based_rand_handler"))
 
     # 3. Compute Derived Variables 
     hm_res = terrain_cfg.get("height_map_resolution")
@@ -116,7 +114,6 @@ def generate_setup(config_dict: dict) -> dict:
     max_terrain_curr_coeff = curr_cfg.get("max_terrain_curriculum_value")
     curr_coeff_delta =  max_curriculum_value/nr_curriculum_levels
     
-    matrix_memory_shape = tuple(mem_cfg.get("matrix_memory_shape",(-1,-1,-1)))
 
     # 4. Assemble Parameter Dictionaries Dynamically
     reward_parameters = dict(reward_cfg)
@@ -233,7 +230,6 @@ def generate_setup(config_dict: dict) -> dict:
     command_creator = StaticMazeCommandCreator(terrain_parameters) if StaticMazeCommandCreator else None
     action_delay_module = DelayAction(dr_parameters["action_delay_parameters"],robot) if DelayAction else None
     pd_control_module = PDControl(robot) if PDControl and robot else None
-    maze_cell_based_rand = MazeCellBasedRand(terrain_parameters["proprioception"]) if MazeCellBasedRand else None
 
     #7. Load training state and optimzer
     optimizer, training_state = actor_critic.create_optimizer_and_training_state(train_cfg)
@@ -390,31 +386,20 @@ def generate_setup(config_dict: dict) -> dict:
             "robot": robot,
             "mode": SimpleMazeEnv,
             "intial_state": state,
-            "initial_mjx_model": initial_mjx_model,
-            "evaluation_env": False,
             "physics_steps_per_env_step": physics_steps,
             "initial_curr_coeff": curr_cfg.get("initial_curriculum_value"),
             "initial_terrain_curr_coeff": curr_cfg.get("initial_terrain_curr_coeff"),
             "actor_observation_size": actor_obs_size,
             "actor_output_size": actor_out_size,
-            "encoded_height_map_size": terrain_cfg.get("encoded_height_map_size"),
-            "critic_observation_size": val_obs_size,
             "max_curr_coeff": max_curriculum_value,
             "max_terrain_curr_coeff": max_terrain_curr_coeff,
             "max_delta_curriculum_value": curr_cfg.get("max_delta_curriculum_value"),
             "curr_coeff_delta": curr_coeff_delta,
-            "max_allowed_loc_error": curr_cfg.get("max_allowed_loc_error"),
-            "nr_height_map_points": nr_height_map_points,
-            "critic_nr_height_map_points": critic_nr_height_map_points,
             "reward_parameters": reward_parameters,
             "dr_parameters": dr_parameters,
             "terrain_parameters": terrain_parameters,
             "height_map_max_delay": dr_cfg.get("height_map", {}).get("height_map_max_delay"),
             "episode_length": ep_len,
-            "lidar_parameters": dict(lidar_cfg),
-            "save_observation_history": False,
-            "exploration_min": env_cfg.get("exploration_min"),
-            "exploration_max": env_cfg.get("exploration_max"),
             "no_goal_pos_multiplier": env_cfg.get("no_goal_pos_multiplier"),
             "initial_no_goal_pos_probability": env_cfg.get("initial_no_goal_pos_probability"),
             "imports": {
@@ -439,7 +424,6 @@ def generate_setup(config_dict: dict) -> dict:
                 "CommandCreator": command_creator,
                 "DelayAction": action_delay_module,
                 "PDControl": pd_control_module,
-                "MazeCellBasedRand":maze_cell_based_rand,
             },
         },
         "training": {
@@ -485,9 +469,7 @@ def generate_setup(config_dict: dict) -> dict:
             "debug": debug_mode,
             "nr_eval_envs": eval_cfg.get("nr_eval_envs"),
             "eval_dict": eval_dict,
-            "use_deterministic_eval": eval_cfg.get("use_deterministic_eval"),
             "deterministic_eval_callback": deterministic_eval_callback,
-            "probabilistic_eval_callback":probabilistic_eval_callback,
             "experiment_callback":experiment_callback,
             "evaluation_at_curriculum_steps": eval_curriculum_steps,
             "drift_damping": train_cfg.get("drift_damping"),

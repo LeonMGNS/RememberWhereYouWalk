@@ -1,7 +1,6 @@
 import jax.numpy as jnp
 from rememberwalk.states.MazeState import MazeState
 from rememberwalk.env.SimpleMazeEnv import SimpleMazeEnv
-import jax
 
 def get_done(state: MazeState, env: SimpleMazeEnv) -> SimpleMazeEnv:
     """
@@ -30,18 +29,11 @@ def get_done(state: MazeState, env: SimpleMazeEnv) -> SimpleMazeEnv:
     """
     floor_heights = env.terrain_observation.get_height_from_xpos(state, state.pipeline_state.geom_xpos[env.robot.non_feet_geom_ids, :2],env)
     geom_heights = state.pipeline_state.geom_xpos[env.robot.non_feet_geom_ids, 2] - floor_heights
-    #inside_wall = floor_heights > 0.5
-    #tolerances = jnp.where(floor_heights > 0.5, 0.0, -0.075)
     geom_done = jnp.any((geom_heights < 0.0))  # Geom is below ground
     done_below_ground = (state.pipeline_state.qpos[2] < 0.5 * (1 - state.curr_coeff) * env.robot.nominal_trunk_z)
-    # Out of height field bounds
-    trunk_pos = state.pipeline_state.qpos[:2]
-    x_height_field_bound = jnp.abs(trunk_pos[0]) > (env.parameters["terrain_parameters"]["height_field_x_length_in_meters"] / 2.0 - 0.5)
-    y_height_field_bound = jnp.abs(trunk_pos[1]) > (env.parameters["terrain_parameters"]["height_field_y_length_in_meters"] / 2.0 - 0.5)
     end_of_episode = state.n_steps >= env.episode_length
     qvel_done = jnp.any(jnp.abs(state.pipeline_state.qvel[:3]) >= 1000.0)
     joint_vel_done = jnp.any((jnp.abs(state.pipeline_state.qvel[env.robot.joint_qvel_adr])/env.robot.max_joint_velocities)  > 0.95)
-    lidar_contact = env.contact_fn(state.pipeline_state._impl.contact, env.robot.lidar_id, env.robot.geom_ids[-1])
     done = end_of_episode | done_below_ground | qvel_done | geom_done #| joint_vel_done
     truncation = done & end_of_episode
     metrics = state.metrics

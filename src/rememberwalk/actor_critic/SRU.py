@@ -254,7 +254,6 @@ class ActorCritic(BaseActorCritic):
         self.critic_height_encoder = HeightEncoder(height_encoder_size=2 * height_encoder_size, layer_sizes=critic_height_encoder_layer_sizes)
         self.init_height_encoder_nn_params = self.height_encoder.init(init_keys[6], jnp.zeros((1, height_sample_size)))
         self.init_critic_height_encoder_nn_params = self.critic_height_encoder.init(init_keys[7], jnp.zeros((1, critic_height_sample_size)))
-        self.sqrt_height_sample_size = jnp.sqrt(critic_height_sample_size).astype(jnp.int32)
 
         self.params = Params(
             policy_parameters=self.init_actor_nn_params,

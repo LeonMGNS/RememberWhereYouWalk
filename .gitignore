@@ -33,7 +33,7 @@ wandb_login_key.txt
 *.npz
 *.zip
 *.rrd
-
+*.json
 # Maze data: ignore generated files, but track the training maze set
 *.pkl
 !data/mazes/maze_only_desc_300000.pkl

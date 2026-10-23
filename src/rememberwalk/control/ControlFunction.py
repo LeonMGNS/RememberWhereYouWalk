@@ -1,6 +1,3 @@
-import jax.numpy as jnp
-
-
 class PDControl:
     def __init__(
         self,
@@ -10,10 +7,6 @@ class PDControl:
         self.p_gain = robot.p_gain
         self.d_gain = robot.d_gain
         self.scaling_factor = robot.scaling_factor
-        self.extrinsic_p_gain_factor = jnp.ones(13)
-        self.extrinsic_d_gain_factor = jnp.ones(13)
-        self.motor_strength_factor = jnp.ones(13)
-        self.extrinsic_position_offset = jnp.zeros(13)
         self.joint_qpos_adr = robot.joint_qpos_adr
         self.joint_qvel_adr = robot.joint_qvel_adr
 
