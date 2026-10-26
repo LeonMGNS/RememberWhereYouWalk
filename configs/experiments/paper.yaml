@@ -68,16 +68,22 @@ approaches:
   - experiment_checkpoints/Transformer/policy_2
   - experiment_checkpoints/Transformer/policy_3
 
-# Ablations. An approach without runs is skipped; add the three checkpoints once trained.
+# Ablations
 - name: SRU
   color: [ 204, 120, 188 ]
   config: sru
-  runs: []
+  runs:
+  - experiment_checkpoints/SRU/policy_1
+  - experiment_checkpoints/SRU/policy_2
+  - experiment_checkpoints/SRU/policy_3
 
 - name: "LSMM (additive)"
   color: [ 202, 145, 97 ]
   config: lsmm_additive
-  runs: []
+  runs:
+  - experiment_checkpoints/LSMM_additive/policy_1
+  - experiment_checkpoints/LSMM_additive/policy_2
+  - experiment_checkpoints/LSMM_additive/policy_3
 
 figures:
   bce: plots/bce_error.pdf

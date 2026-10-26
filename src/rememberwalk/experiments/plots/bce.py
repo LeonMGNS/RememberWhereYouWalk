@@ -48,8 +48,11 @@ def full_episode_only(episode_lengths, bce_error, label=""):
     keep = np.asarray(episode_lengths) == T
     n_kept = int(keep.sum())
     if n_kept == 0:
-        print(f"** WARNING: no full-length episodes for {label}, keeping all envs")
-        return bce_error
+        # The rollout writes 0 for every step after termination; counting those as a
+        # perfect reconstruction would pull the mean down, so they are masked out.
+        print(f"** WARNING: no full-length episodes for {label}, keeping all envs up to their termination")
+        alive = np.arange(T)[:, None] < np.asarray(episode_lengths)[None, :]
+        return np.where(alive, bce_error, np.nan)
     if n_kept < keep.size:
         print(f"   {label}: {n_kept}/{keep.size} envs ran the full {T} steps")
     return bce_error[:, keep]
@@ -102,6 +105,7 @@ def plot_bce_pooled(
                 hi = np.nanpercentile(arr, 75, axis=1)
             else:
                 raise ValueError(band)
+            lo = np.maximum(lo, 0.0)    # BCE is non-negative
 
             if smooth > 1:
                 ker = np.ones(smooth) / smooth

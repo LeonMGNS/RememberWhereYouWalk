@@ -3,7 +3,6 @@ import jax.numpy as jnp
 import flax.linen as nn
 from flax.linen.initializers import constant, orthogonal
 from rememberwalk.actor_critic.BaseActorCritic import BaseActorCritic
-from rememberwalk.actor_critic.MLP import Actor,Critic,HeightEncoder
 import optax
 import flax
 @flax.struct.dataclass
@@ -45,13 +44,14 @@ class Transition:
     noisy_true_pos: jnp.ndarray
     linear_velocity:jnp.ndarray
 
-class F(nn.Module):
+class WindowUpdateMLP(nn.Module):
+    """Maps the local memory window and its context to a (window_size,) gate in [0, 1]. Used for F and G."""
     window_size:int
     @nn.compact
     def __call__(self,x)->jnp.ndarray:
         def dense_layer(units, kernel_init=orthogonal(jnp.sqrt(2)), bias_init=constant(0.0)):
             return nn.Dense(units, kernel_init=kernel_init, bias_init=bias_init)
-        
+
         y = dense_layer(128)(x)
         y = nn.elu(y)
         y = dense_layer(128)(y)
@@ -59,21 +59,7 @@ class F(nn.Module):
         y = dense_layer(self.window_size)(y)
         y = nn.sigmoid(y)
         return y
-    
-class G(nn.Module):
-    window_size:int
-    @nn.compact
-    def __call__(self,x)->jnp.ndarray:
-        def dense_layer(units, kernel_init=orthogonal(jnp.sqrt(2)), bias_init=constant(0.0)):
-            return nn.Dense(units, kernel_init=kernel_init, bias_init=bias_init)
-        y = dense_layer(128)(x)
-        y = nn.elu(y)
-        y = dense_layer(128)(y)
-        y = nn.elu(y)
-        y = dense_layer(self.window_size)(y)
-        y = nn.sigmoid(y)
-        return y
-        
+
 class MatrixMemoryEncoder(nn.Module):
     output_feature_size: int
 
@@ -121,46 +107,6 @@ class MatrixMemoryEncoder(nn.Module):
         return y
     
 
-class LinearVelocityHead(nn.Module):
-
-    @nn.compact
-    def __call__(self, data):
-        
-        def dense_layer(units, kernel_init=orthogonal(jnp.sqrt(2)), bias_init=constant(0.0)):
-            return nn.Dense(units, kernel_init=kernel_init, bias_init=bias_init)
-        
-        x = dense_layer(128)(data)
-        x = nn.elu(x)
-
-        x = dense_layer(64)(x)
-        x = nn.elu(x)
-
-        x = dense_layer(3)(x)
-        return x
-
-
-
-class CrossEntropyHead(nn.Module):
-    distribution_size: int
-
-    @nn.compact
-    def __call__(self,data):
-        
-        def dense_layer(units, kernel_init=orthogonal(jnp.sqrt(2)), bias_init=constant(0.0)):
-            return nn.Dense(units, kernel_init=kernel_init, bias_init=bias_init)
-        
-        x = dense_layer(256)(data)
-        x = nn.elu(x)
-        x = nn.LayerNorm()(x)
-
-        x = dense_layer(128)(x)
-        x = nn.elu(x)
-
-        x = dense_layer(self.distribution_size)(x)
-        x = jnp.clip(x,-10,10)
-        return x
-
-    
 class ActorCritic(BaseActorCritic):
 
     def __init__(self,actor_critic_dict:dict,seed=0,actor_layer_sizes=[512,256,128],critic_layer_sizes=[512,256,128],actor_height_encoder_layer_sizes=[256,128],critic_height_encoder_layer_sizes=[512,256]):
@@ -187,68 +133,58 @@ class ActorCritic(BaseActorCritic):
         self.matrix_memory_feature_vector_size = actor_critic_dict["matrix_memory_feature_vector_size"]
         self.height_field_in_meters_shape = actor_critic_dict["height_field_in_meters_shape"]
 
-        #NN initialization
-        # Init Actor
-        self.actor = Actor(actor_output_size=self.action_size,layer_sizes=actor_layer_sizes)
-        self.init_actor_nn_params = self.actor.init(init_keys[0],jnp.zeros((1, self.actor_observation_size+self.matrix_memory_feature_vector_size+self.height_encoder_size)))
-        
-        # Init Critc
-        self.critic = Critic(layer_sizes=critic_layer_sizes)
-        self.init_critic_nn_params = self.critic.init(init_keys[1],jnp.zeros((1, self.value_observation_size+2*self.height_encoder_size)))
-        
-        # Init Height Encoder
-        self.height_encoder = HeightEncoder(height_encoder_size=self.height_encoder_size,layer_sizes=actor_height_encoder_layer_sizes)
-        self.critic_height_encoder = HeightEncoder(height_encoder_size=2*self.height_encoder_size,layer_sizes=critic_height_encoder_layer_sizes)
-        self.init_height_encoder_nn_params = self.height_encoder.init(init_keys[7], jnp.zeros((1, self.height_sample_size)))
-        
-        self.init_critic_height_encoder_nn_params = self.critic_height_encoder.init(init_keys[8], jnp.zeros((1, self.critic_height_sample_size)))
+        # Init actor, critic, height encoders and heads
+        self.init_shared_networks(
+            keys={"actor": init_keys[0], "critic": init_keys[1], "height_encoder": init_keys[7], "critic_height_encoder": init_keys[8],
+                  "cross_entropy": init_keys[9], "linear_velocity": init_keys[10]},
+            actor_memory_size=self.matrix_memory_feature_vector_size,
+            head_memory_size=self.matrix_memory_feature_vector_size,
+            actor_layer_sizes=actor_layer_sizes,
+            critic_layer_sizes=critic_layer_sizes,
+            actor_height_encoder_layer_sizes=actor_height_encoder_layer_sizes,
+            critic_height_encoder_layer_sizes=critic_height_encoder_layer_sizes,
+        )
 
-        # Init Cross Entropy Head
-        self.cross_entropy_head = CrossEntropyHead(int(self.distribution_size))
-        self.init_cross_entropy_head_nn_params = self.cross_entropy_head.init(init_keys[9],jnp.zeros((1,self.actor_observation_size+self.height_encoder_size+self.matrix_memory_feature_vector_size)))
-
-        #Init Linear Velocity head
-        self.linear_velocity_head = LinearVelocityHead()
-        self.init_linear_velocity_head_nn_params = self.linear_velocity_head.init(init_keys[10],jnp.zeros((1,self.actor_observation_size)))
-
-        # Init F function
-        self.F = F(self.matrix_memory_update_window_size)
-        self.init_F_nn_params = self.F.init(init_keys[12],jnp.zeros((1,self.actor_observation_size+self.height_encoder_size+self.matrix_memory_update_window_size+7)))
-        # Init G function
-        self.G = G(self.matrix_memory_update_window_size)
-        self.init_G_nn_params = self.G.init(init_keys[13],jnp.zeros((1,self.actor_observation_size+self.height_encoder_size+self.matrix_memory_update_window_size+7)))
+        # Init F (calibration) and G (update) functions
+        self.update_input_size = self.actor_observation_size+self.height_encoder_size+self.matrix_memory_update_window_size+7
+        self.init_update_networks(init_keys)
 
         #Init Matrix Memory Encoder
         self.matrix_memory_encoder = MatrixMemoryEncoder(self.matrix_memory_feature_vector_size)
         self.init_matrix_memory_encoder_nn_params = self.matrix_memory_encoder.init(init_keys[15],jnp.zeros((1,self.matrix_memory_shape[0],self.matrix_memory_shape[1],self.matrix_memory_shape[2])))
-        self.params = Params(self.init_actor_nn_params,self.init_critic_nn_params,self.init_cross_entropy_head_nn_params,self.init_height_encoder_nn_params,self.init_critic_height_encoder_nn_params,self.init_F_nn_params,self.init_G_nn_params,self.init_matrix_memory_encoder_nn_params,self.init_linear_velocity_head_nn_params)
-        self.labels = Params(policy_parameters="actor",value_parameters="critic",cross_entropy_params="head",height_encoder_parameters="actor",critic_height_encoder_parameters="critic",f_parameters="actor",g_parameters="actor",matrix_memory_encoder_parameters="actor",linear_velocity_parameters="head")
-    
+        self.params, self.labels = self.make_params_and_labels()
+
+    def init_update_networks(self, init_keys):
+        self.F = WindowUpdateMLP(self.matrix_memory_update_window_size)
+        self.init_F_nn_params = self.F.init(init_keys[12],jnp.zeros((1,self.update_input_size)))
+        self.G = WindowUpdateMLP(self.matrix_memory_update_window_size)
+        self.init_G_nn_params = self.G.init(init_keys[13],jnp.zeros((1,self.update_input_size)))
+
+    def make_params_and_labels(self):
+        params = Params(
+            policy_parameters=self.init_actor_nn_params,
+            value_parameters=self.init_critic_nn_params,
+            cross_entropy_params=self.init_cross_entropy_head_nn_params,
+            height_encoder_parameters=self.init_height_encoder_nn_params,
+            critic_height_encoder_parameters=self.init_critic_height_encoder_nn_params,
+            f_parameters=self.init_F_nn_params,
+            g_parameters=self.init_G_nn_params,
+            matrix_memory_encoder_parameters=self.init_matrix_memory_encoder_nn_params,
+            linear_velocity_parameters=self.init_linear_velocity_head_nn_params,
+        )
+        labels = Params(policy_parameters="actor",value_parameters="critic",cross_entropy_params="head",height_encoder_parameters="actor",critic_height_encoder_parameters="critic",f_parameters="actor",g_parameters="actor",matrix_memory_encoder_parameters="actor",linear_velocity_parameters="head")
+        return params, labels
+
     def create_optimizer_and_training_state(self, train_cfg:dict):
         """
         Factory method to initialize the architecture-specific TrainingState.
         """
         memory_shape = self.matrix_memory_shape
         nr_envs = train_cfg["nr_envs"]
-        learning_rate = train_cfg["learning_rate"]
-        critic_learning_rate = train_cfg["critic_learning_rate"]
-        clip_norm = train_cfg["optimizer_clip_norm"]
-        eps = train_cfg["optimizer_eps"]
-        weight_decay = train_cfg["optimizer_weight_decay"]
-
-        # Create optimizer
-        actor_optimizer = optax.chain(optax.clip_by_global_norm(clip_norm), optax.adam(learning_rate=learning_rate, eps=eps))
-        critic_optimizer = optax.chain(optax.clip_by_global_norm(clip_norm), optax.adamw(learning_rate=critic_learning_rate, eps=eps, weight_decay=weight_decay))
-        head_optimizer = optax.chain(optax.clip_by_global_norm(clip_norm), optax.adamw(learning_rate=train_cfg.get("head_learning_rate"), eps=eps, weight_decay=weight_decay))
-
-        optimizer = optax.multi_transform(
-            transforms={'actor': actor_optimizer, 'critic': critic_optimizer, "head": head_optimizer},
-            param_labels=self.labels,
-        ) 
+        optimizer = self.create_optimizer(train_cfg)
         # Create the initial memory state
         initial_matrix_memory = jnp.ones((nr_envs, memory_shape[0], memory_shape[1], memory_shape[2])) * 0.5
-      
-        
+
         # Create training state
         training_state = TrainingState(optimizer_state=optimizer.init(self.params),
                                         params=self.params,
@@ -256,7 +192,7 @@ class ActorCritic(BaseActorCritic):
                                         last_matrix_memory=initial_matrix_memory,
                                         )
         return optimizer, training_state
-    
+
     def create_dictionaries(self,eval_cfg):
 
         visualizer_dict = {
@@ -264,17 +200,26 @@ class ActorCritic(BaseActorCritic):
         "action": jnp.zeros((self.action_size,)),
         }
         eval_dict = {"matrix_memory": jnp.ones((eval_cfg["nr_eval_envs"], self.matrix_memory_shape[0], self.matrix_memory_shape[1], self.matrix_memory_shape[2])) * 0.5}
-        
+
         eval_dict["predicted_distribution"] = jnp.zeros((eval_cfg["nr_eval_envs"],self.distribution_size))
         eval_dict["pred_delta_loc"]= jnp.zeros((eval_cfg["nr_eval_envs"],3))
         return visualizer_dict,eval_dict
 
+    def apply_window_update(self, parameters:Params, local_memory:jnp.ndarray, make_update_input):
+        """M_local <- M_local * F(x) + G(x)
+
+        ``make_update_input()`` builds x. F and G each build their own copy on purpose: sharing one
+        concatenation changes the gradient summation order and breaks bit-exact reproduction.
+        """
+        update_matrix = self.G.apply(parameters.g_parameters,make_update_input()).reshape(local_memory.shape)
+        calibration_matrix = self.F.apply(parameters.f_parameters,make_update_input()).reshape(local_memory.shape)
+        return local_memory * calibration_matrix + update_matrix
 
     def update_matrix_memory(self,parameters:Params,matrix_memory:jnp.ndarray,height_encoded:jnp.ndarray,proprio_observation:jnp.ndarray,true_noisy_pos:jnp.ndarray,pred_linear_velocity:jnp.ndarray):
         H,W,C = self.matrix_memory_shape
         h,w,c = self.matrix_memory_update_window_shape
- 
-        # Index creation 
+
+        # Index creation
         shape_m = jnp.asarray(self.height_field_in_meters_shape)
         memory_shape = jnp.asarray(self.matrix_memory_shape)
         idx_in_matrix_memory = (true_noisy_pos[:2]/ shape_m + 0.5) * memory_shape[:2]
@@ -286,16 +231,12 @@ class ActorCritic(BaseActorCritic):
         idxs = jnp.clip(idxs_3d, min_bounds, max_bounds)
         #Get local memory
         local_memory = jax.lax.dynamic_slice(matrix_memory, idxs, (h, w, c))
-        #Update Matrix Creation
-        G_input = jnp.concatenate([height_encoded.reshape((self.height_encoder_size,)),proprio_observation.reshape((self.actor_observation_size,)),local_memory.flatten(),idxs,true_noisy_pos[2].reshape((1,)),pred_linear_velocity],axis=-1)
-        update_matrix = self.G.apply(parameters.g_parameters,G_input).reshape((h,w,c))
-        
-        #Calibration Matrix Creation
-        F_input = jnp.concatenate([height_encoded.reshape((self.height_encoder_size,)),proprio_observation.reshape((self.actor_observation_size,)),local_memory.flatten(),idxs,true_noisy_pos[2].reshape((1,)),pred_linear_velocity],axis=-1)
-        calibration_matrix = self.F.apply(parameters.f_parameters,F_input).reshape((h,w,c))
 
         # Matrix Memory Update
-        local_memory = local_memory * calibration_matrix + update_matrix
+        window = local_memory
+        def make_update_input():
+            return jnp.concatenate([height_encoded.reshape((self.height_encoder_size,)),proprio_observation.reshape((self.actor_observation_size,)),window.flatten(),idxs,true_noisy_pos[2].reshape((1,)),pred_linear_velocity],axis=-1)
+        local_memory = self.apply_window_update(parameters, local_memory, make_update_input)
 
         max_local_memory = jnp.max(local_memory)+0.02
 
@@ -304,96 +245,43 @@ class ActorCritic(BaseActorCritic):
         matrix_memory = jax.lax.dynamic_update_slice(matrix_memory, local_memory, idxs)
         return matrix_memory
 
-
+    def step_memory(self, parameters:Params, observation:jnp.ndarray, height_observation:jnp.ndarray, matrix_memory:jnp.ndarray, true_noisy_pos:jnp.ndarray):
+        """Writes the current step into the memory and encodes it. Returns (height_encoded, memory feature vector, new memory)."""
+        height_encoded = self.encode_height(parameters, height_observation)
+        pred_linear_vel = self.predict_linear_velocity(parameters, observation)
+        new_matrix_memory = jax.vmap(self.update_matrix_memory,(None,0,0,0,0,0))(parameters,matrix_memory,height_encoded,observation.reshape((-1,self.actor_observation_size)),true_noisy_pos,pred_linear_vel)
+        matrix_memory_feature_vector = self.matrix_memory_encoder.apply(parameters.matrix_memory_encoder_parameters,new_matrix_memory)
+        return height_encoded, matrix_memory_feature_vector, new_matrix_memory
 
     def sample_action(self, parameters:Params ,observation:jnp.ndarray, height_observation:jnp.ndarray,matrix_memory:jnp.ndarray,true_noisy_pos:jnp.ndarray,key:jnp.ndarray):
-        #Get netowrk parameters
-        actor_nn_params = parameters.policy_parameters
-        height_encoder_nn_params = parameters.height_encoder_parameters
-        matrix_memory_encoder_nn_params = parameters.matrix_memory_encoder_parameters
-        linear_velocity_head_nn_params = parameters.linear_velocity_parameters
+        height_encoded, matrix_memory_feature_vector, new_matrix_memory = self.step_memory(parameters, observation, height_observation, matrix_memory, true_noisy_pos)
 
-        #Height encoder step
-        height_encoded = self.height_encoder.apply(height_encoder_nn_params, height_observation.reshape(-1, self.height_sample_size))
-        height_encoded = height_encoded.reshape((-1, self.height_encoder.height_encoder_size))
-        
-        #Linear velocity step
-        pred_linear_vel = self.linear_velocity_head.apply(linear_velocity_head_nn_params,observation.reshape((-1,self.actor_observation_size)))
-        
-        #Update Matrix Memory
-        new_matrix_memory = jax.vmap(self.update_matrix_memory,(None,0,0,0,0,0))(parameters,matrix_memory,height_encoded,observation.reshape((-1,self.actor_observation_size)),true_noisy_pos,pred_linear_vel)        
-        
-        # Matrix memory encoder step
-        matrix_memory_feature_vector = self.matrix_memory_encoder.apply(matrix_memory_encoder_nn_params,new_matrix_memory)
-
-        #Actor step
         actor_input =jnp.concatenate([observation.reshape((-1,self.actor_observation_size)),height_encoded,matrix_memory_feature_vector],axis=-1)
-        loc,log_scale= self.actor.apply(actor_nn_params,actor_input )
-        log_scale = jnp.clip(log_scale,jnp.log(self.min_scale),jnp.log(self.max_scale))
-        scale = jnp.exp(log_scale)
-        action = jax.random.normal(key, shape=loc.shape) * scale + loc
-        log_prob = self.log_prob(action, loc, scale)
-        log_prob = jnp.expand_dims(log_prob,axis=-1)
-    
-        #Cross Entropy Head setp
-        predicted_distribution = self.cross_entropy_head.apply(parameters.cross_entropy_params,jnp.concatenate([observation.reshape((-1,self.actor_observation_size)), matrix_memory_feature_vector,jax.lax.stop_gradient(height_encoded)],axis=-1))
+        loc, scale = self.actor_distribution(parameters, actor_input)
+        action, log_prob = self.sample_from_distribution(loc, scale, key)
+
+        predicted_distribution = self.predict_distribution(parameters, observation, matrix_memory_feature_vector, height_encoded)
         return action,scale, log_prob,predicted_distribution,new_matrix_memory
 
     def get_deterministic_action(self, parameters:Params, observation:jnp.ndarray, height_observation:jnp.ndarray,matrix_memory:jnp.ndarray,true_noisy_pos:jnp.ndarray):
-        #Get netowrk parameters
-        actor_nn_params = parameters.policy_parameters
-        height_encoder_nn_params = parameters.height_encoder_parameters
-        matrix_memory_encoder_nn_params = parameters.matrix_memory_encoder_parameters
-        linear_velocity_head_nn_params = parameters.linear_velocity_parameters
+        height_encoded, matrix_memory_feature_vector, new_matrix_memory = self.step_memory(parameters, observation, height_observation, matrix_memory, true_noisy_pos)
 
-        #Height encoder step
-        height_encoded = self.height_encoder.apply(height_encoder_nn_params, height_observation.reshape(-1, self.height_sample_size))
-        height_encoded = height_encoded.reshape((-1, self.height_encoder.height_encoder_size))
-        
-        #Linear velocity step
-        pred_linear_vel = self.linear_velocity_head.apply(linear_velocity_head_nn_params,observation.reshape((-1,self.actor_observation_size)))
-        
-        #Update Matrix Memory
-        new_matrix_memory = jax.vmap(self.update_matrix_memory,(None,0,0,0,0,0))(parameters,matrix_memory,height_encoded,observation.reshape((-1,self.actor_observation_size)),true_noisy_pos,pred_linear_vel)        
-        
-        # Matrix memory encoder step
-        matrix_memory_feature_vector = self.matrix_memory_encoder.apply(matrix_memory_encoder_nn_params,new_matrix_memory)
-
-        #Actor step
         actor_input =jnp.concatenate([observation.reshape((-1,self.actor_observation_size)),height_encoded,matrix_memory_feature_vector],axis=-1)
-        loc,log_scale= self.actor.apply(actor_nn_params,actor_input )
-    
-        #Cross Entropy Head setp
-        predicted_distribution = self.cross_entropy_head.apply(parameters.cross_entropy_params,jnp.concatenate([observation.reshape((-1,self.actor_observation_size)), matrix_memory_feature_vector,jax.lax.stop_gradient(height_encoded)],axis=-1))
-        
+        loc,log_scale= self.actor.apply(parameters.policy_parameters,actor_input )
+
+        predicted_distribution = self.predict_distribution(parameters, observation, matrix_memory_feature_vector, height_encoded)
         return loc,predicted_distribution,new_matrix_memory
-    def evaluate_actions(self, parameters:Params ,observation:jnp.ndarray, height_observation:jnp.ndarray):
-        value_nn_params = parameters.value_parameters
-        height_encoder_params = parameters.critic_height_encoder_parameters
-        height_encoded = self.critic_height_encoder.apply(height_encoder_params, height_observation.reshape(-1, self.critic_height_sample_size))
-        height_encoded = height_encoded.reshape((-1, int(self.critic_height_encoder.height_encoder_size)))
-        value = self.critic.apply(value_nn_params,jnp.concatenate([observation.reshape((-1,self.value_observation_size)),height_encoded],axis=-1))
-        return value
 
     def log_prob_from_observation(self, actions:jnp.ndarray, parameters:Params, observation:jnp.ndarray, height_encoded:jnp.ndarray,matrix_memory:jnp.ndarray):
-        actor_nn_params = parameters.policy_parameters
-        matrix_memory_encoder_nn_params = parameters.matrix_memory_encoder_parameters
         actions = actions.reshape((-1,self.action_size))
         height_encoded = height_encoded.reshape((-1, self.height_encoder.height_encoder_size))
 
-        # Matrix memory encoder step
-        matrix_memory_feature_vector = self.matrix_memory_encoder.apply(matrix_memory_encoder_nn_params,matrix_memory)
+        matrix_memory_feature_vector = self.matrix_memory_encoder.apply(parameters.matrix_memory_encoder_parameters,matrix_memory)
 
-        #Actor step
         actor_input =jnp.concatenate([observation.reshape((-1,self.actor_observation_size)),height_encoded,matrix_memory_feature_vector],axis=-1)
-        loc,log_scale= self.actor.apply(actor_nn_params,actor_input)
-        log_scale = jnp.clip(log_scale,jnp.log(self.min_scale),jnp.log(self.max_scale))
-        scale = jnp.exp(log_scale)
+        loc, scale = self.actor_distribution(parameters, actor_input)
         log_prob = self.log_prob(actions, loc, scale)
         log_prob = jnp.expand_dims(log_prob,axis=-1)
 
-        # Cross Entropy Head
-        predicted_distribution = self.cross_entropy_head.apply(parameters.cross_entropy_params,jnp.concatenate([observation.reshape((-1,self.actor_observation_size)), matrix_memory_feature_vector,jax.lax.stop_gradient(height_encoded)],axis=-1))
+        predicted_distribution = self.predict_distribution(parameters, observation, matrix_memory_feature_vector, height_encoded)
         return log_prob, loc, scale,predicted_distribution
-
-
