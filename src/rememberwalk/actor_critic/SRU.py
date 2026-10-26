@@ -1,7 +1,14 @@
-import jax.numpy as jnp
+"""SRU ablation (``actor_critic.SRU.ActorCritic``).
+
+The LSTM actor-critic with a Spatially-Enhanced Recurrent Unit as its core.
+"""
+
 import flax.linen as nn
-from flax.linen.initializers import constant, orthogonal, lecun_normal
+import jax.numpy as jnp
+from flax.linen.initializers import constant, lecun_normal, orthogonal
+
 from rememberwalk.actor_critic import LSTM
+
 # Params, TrainingState and Transition are shared with the LSTM (field names kept for trainer compatibility)
 from rememberwalk.actor_critic.LSTM import Params, TrainingState, Transition  # noqa: F401
 
@@ -38,6 +45,7 @@ class SRUCell(nn.Module):
 
     Carry layout is (c, h), identical to flax's LSTM cells.
     """
+
     features: int
     use_refined_gate: bool = True
     spatial_bias_init: float = 1.0  # s_t ~ 1 at init -> cell starts close to a plain LSTM
@@ -47,13 +55,22 @@ class SRUCell(nn.Module):
         c, h = carry
 
         # Fused gate pre-activations: [i, f, g, o]
-        input_proj = nn.Dense(4 * self.features, kernel_init=lecun_normal(), bias_init=constant(0.0), name="input_proj")(x)
-        hidden_proj = nn.Dense(4 * self.features, use_bias=False, kernel_init=orthogonal(), name="hidden_proj")(h)
+        input_proj = nn.Dense(
+            4 * self.features, kernel_init=lecun_normal(), bias_init=constant(0.0), name="input_proj"
+        )(x)
+        hidden_proj = nn.Dense(
+            4 * self.features, use_bias=False, kernel_init=orthogonal(), name="hidden_proj"
+        )(h)
         z = input_proj + hidden_proj
         i_pre, f_pre, g_pre, o_pre = jnp.split(z, 4, axis=-1)
 
         # Spatial transformation term (input only, as in the paper)
-        s = nn.Dense(self.features, kernel_init=lecun_normal(), bias_init=constant(self.spatial_bias_init), name="spatial_proj")(x)
+        s = nn.Dense(
+            self.features,
+            kernel_init=lecun_normal(),
+            bias_init=constant(self.spatial_bias_init),
+            name="spatial_proj",
+        )(x)
 
         i = nn.sigmoid(i_pre)
         f = nn.sigmoid(f_pre)
@@ -61,7 +78,7 @@ class SRUCell(nn.Module):
         g = jnp.tanh(s * g_pre)
 
         if self.use_refined_gate:
-            r = i * (1.0 - (1.0 - f) ** 2) + (1.0 - i) * f ** 2
+            r = i * (1.0 - (1.0 - f) ** 2) + (1.0 - i) * f**2
             new_c = r * c + (1.0 - r) * g
         else:
             new_c = f * c + i * g
@@ -76,6 +93,7 @@ class SRU(nn.Module):
     Two ELU dense layers in, one SRU step, one ELU dense projection out, so the
     heads receive a feature vector of size ``memory_output_features``.
     """
+
     hidden_size: int
     memory_output_features: int
     use_refined_gate: bool = True
@@ -101,13 +119,24 @@ class ActorCritic(LSTM.ActorCritic):
     """LSTM actor-critic with the SRU core; params, state and loss are shared with the LSTM."""
 
     def core_sizes(self, config: dict):
+        """(hidden size, output feature size) of the SRU core."""
         # SRU sizes; fall back to the LSTM / transformer keys so existing configs keep working.
-        lstm_hidden_size = config.get("sru_hidden_size", config.get("lstm_hidden_size", config.get("transformer_hidden_size", 256)))
-        lstm_memory_output_features = config.get("sru_memory_output_features", config.get("lstm_memory_output_features", config.get("transformer_memory_output_features")))
+        lstm_hidden_size = config.get(
+            "sru_hidden_size", config.get("lstm_hidden_size", config.get("transformer_hidden_size", 256))
+        )
+        lstm_memory_output_features = config.get(
+            "sru_memory_output_features",
+            config.get("lstm_memory_output_features", config.get("transformer_memory_output_features")),
+        )
         return lstm_hidden_size, lstm_memory_output_features
 
     def make_core(self, config: dict) -> nn.Module:
+        """SRU core (``sru_use_refined_gate``: True = SRU-Ours, False = SRU-LSTM)."""
         # True: SRU-Ours, False: SRU-LSTM
         self.use_refined_gate = config.get("sru_use_refined_gate", True)
         # Attribute name ``lstm`` kept for trainer compatibility
-        return SRU(hidden_size=self.lstm_hidden_size, memory_output_features=self.lstm_memory_output_features, use_refined_gate=self.use_refined_gate)
+        return SRU(
+            hidden_size=self.lstm_hidden_size,
+            memory_output_features=self.lstm_memory_output_features,
+            use_refined_gate=self.use_refined_gate,
+        )

@@ -7,17 +7,18 @@ visit distribution to uniform (lower = more uniform exploration).
 Memory: cell_visits is (T, envs, cx, cy). Each run is reduced to its per-env final
 visit maps at load time, so the big array never outlives its iteration.
 """
+
 import textwrap
 
+import matplotlib as mpl
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 from matplotlib.transforms import Bbox
 
-from rememberwalk.experiments.plots.style import RC, FIGWIDTH_IN, FS_SCRIPT, CONTROL_DT, png_path
 from rememberwalk.experiments.plots.exploration import load_exploration_data
+from rememberwalk.experiments.plots.style import CONTROL_DT, FIGWIDTH_IN, FS_SCRIPT, RC, png_path
 
 # Sequential map for the visit counts. mako_r is perceptually uniform, runs
 # light -> dark (so low counts read as empty), and its blue-green end echoes
@@ -30,8 +31,7 @@ CMAP = sns.color_palette(CMAP_NAME, as_cmap=True)
 MAX_ROW_MAP_IN = 1.15
 
 
-def final_visit_counts(episode_lengths, cell_visits, full_episodes_only=True,
-                       label=""):
+def final_visit_counts(episode_lengths, cell_visits, full_episodes_only=True, label=""):
     """Per-env final cumulative visit maps, (n_kept, cx, cy). Each env is read at
     its own final step, so several runs can be pooled before averaging."""
     cell_visits = np.asarray(cell_visits)
@@ -74,16 +74,16 @@ def plot_visit_heatmaps_pooled(
     runs,
     out_path,
     title="",
-    figwidth_in=None,      # None -> single column (3.38in)
-    figheight_in=None,     # None -> keeps the cells square
-    ncols=2,               # 2 -> 2x2; set 4 for a single row
+    figwidth_in=None,  # None -> single column (3.38in)
+    figheight_in=None,  # None -> keeps the cells square
+    ncols=2,  # 2 -> 2x2; set 4 for a single row
     cmap=None,
     norm="linear",
     vmax=None,
     show_kl=True,
-    short_kl=False,        # "D_KL = x" instead of "D_KL(p || u) = x", for narrow panels
-    cbar_frac=0.13,        # colourbar share of the figure width
-    cbar_location="right", # "bottom" -> horizontal colourbar under a single row of maps
+    short_kl=False,  # "D_KL = x" instead of "D_KL(p || u) = x", for narrow panels
+    cbar_frac=0.13,  # colourbar share of the figure width
+    cbar_location="right",  # "bottom" -> horizontal colourbar under a single row of maps
     wrap=18,
     cbar_label="Average time spent per cell (s)",
 ):
@@ -134,19 +134,18 @@ def plot_visit_heatmaps_pooled(
             for i in range(len(names)):
                 r, c = divmod(i, ncols)
                 offset = ncols - rem if r == nrows - 1 else 0
-                axes.append(fig.add_subplot(grid[r, offset + 2 * c: offset + 2 * c + 2]))
+                axes.append(fig.add_subplot(grid[r, offset + 2 * c : offset + 2 * c + 2]))
             axes = np.array(axes)
         else:
-            fig, axes = plt.subplots(nrows, ncols,
-                                     figsize=(width, height), layout="constrained")
+            fig, axes = plt.subplots(nrows, ncols, figsize=(width, height), layout="constrained")
             axes = np.atleast_1d(axes).ravel()
-        fig.get_layout_engine().set(w_pad=0.01, h_pad=0.01,
-                                    wspace=0.02, hspace=0.04)
+        fig.get_layout_engine().set(w_pad=0.01, h_pad=0.01, wspace=0.02, hspace=0.04)
 
         im = None
-        for ax, name, m in zip(axes, names, maps):
-            im = ax.imshow(m.T, cmap=cmap, norm=cnorm, origin="lower",
-                           interpolation="nearest", aspect="equal")
+        for ax, name, m in zip(axes, names, maps, strict=False):  # the grid can have spare axes
+            im = ax.imshow(
+                m.T, cmap=cmap, norm=cnorm, origin="lower", interpolation="nearest", aspect="equal"
+            )
             label = textwrap.fill(name, wrap)
             if show_kl:
                 # p = pooled visit distribution, u = uniform over the cells.
@@ -154,8 +153,7 @@ def plot_visit_heatmaps_pooled(
                 if short_kl:
                     label += f"\n$D_{{\\mathrm{{KL}}}} = {kl_to_uniform(m):.3f}$"
                 else:
-                    label += ("\n$D_{\\mathrm{KL}}(p\\,\\|\\,u) = "
-                              f"{kl_to_uniform(m):.3f}$")
+                    label += f"\n$D_{{\\mathrm{{KL}}}}(p\\,\\|\\,u) = {kl_to_uniform(m):.3f}$"
             ax.set_title(label, fontsize=FS_SCRIPT, pad=2.0)
             ax.set_xticks([])
             ax.set_yticks([])
@@ -163,15 +161,23 @@ def plot_visit_heatmaps_pooled(
                 sp.set_linewidth(0.4)
                 sp.set_color("0.6")
 
-        for ax in axes[len(names):]:      # unused cells in a partial grid
+        for ax in axes[len(names) :]:  # unused cells in a partial grid
             ax.axis("off")
 
         if cbar_location == "bottom":
-            cbar = fig.colorbar(im, ax=list(axes[:len(names)]), location="bottom",
-                                fraction=0.06, pad=0.03, shrink=0.6, aspect=30)
+            cbar = fig.colorbar(
+                im,
+                ax=list(axes[: len(names)]),
+                location="bottom",
+                fraction=0.06,
+                pad=0.03,
+                shrink=0.6,
+                aspect=30,
+            )
         else:
-            cbar = fig.colorbar(im, ax=list(axes[:len(names)]),
-                                fraction=cbar_frac * 0.42, pad=0.04, shrink=0.9)
+            cbar = fig.colorbar(
+                im, ax=list(axes[: len(names)]), fraction=cbar_frac * 0.42, pad=0.04, shrink=0.9
+            )
         cbar.set_label(cbar_label, fontsize=FS_SCRIPT, labelpad=2.0)
         cbar.ax.tick_params(labelsize=FS_SCRIPT - 1, width=0.4, length=1.5)
         cbar.outline.set_linewidth(0.4)
@@ -192,51 +198,56 @@ def plot_visit_heatmaps_pooled(
         def _imbalance():
             fig.canvas.draw()
             r = fig.canvas.get_renderer()
-            b = [ax.get_window_extent(r).transformed(inv)
-                 for ax in axes[:len(names)]]
+            b = [ax.get_window_extent(r).transformed(inv) for ax in axes[: len(names)]]
             return (W - max(x.x1 for x in b)) - min(x.x0 for x in b)
 
         # Shifting the layout region also re-flows the colourbar, so a single
         # shot under-corrects; iterate the shift until both margins match.
         x0 = 0.0
         for _ in range(6):
-            e = _imbalance()                # right overhang minus left
+            e = _imbalance()  # right overhang minus left
             if abs(e) < 0.01:
                 break
             x0 = min(max(x0 + e / (2 * W), 0.0), 0.4)
             fig.get_layout_engine().set(rect=(x0, 0, 1 - x0, 1))
         page = Bbox([[0, 0], [W, H]])
         fig.savefig(out_path, bbox_inches=page)
-        fig.savefig(png_path(out_path), dpi=400,
-                    bbox_inches=page)
+        fig.savefig(png_path(out_path), dpi=400, bbox_inches=page)
         plt.close(fig)
     return out_path
 
 
 def make_heat_map_figure(suite, out_path, approaches=None, labels=None):
+    """Writes the cell visit heat maps (time per cell, pooled over runs and mazes) of ``approaches``
+    (default: all approaches of the suite) to ``out_path``.
+
+    ``labels`` are optional display names, one per approach. The layout adapts to the number of
+    approaches.
+    """
     approaches = approaches or suite.approaches
     labels = labels or [a.name for a in approaches]
     pooled = {}
-    for approach, display in zip(approaches, labels):
+    for approach, display in zip(approaches, labels, strict=True):
         finals = []
         for i in range(len(approach.runs)):
             ep, cv = load_exploration_data(suite.data_dir(approach, i))
             finals.append(final_visit_counts(ep, cv, label=f"{approach.name} run {i + 1}"))
             del cv
-        stacked = np.concatenate(finals, axis=0)      # (n_pooled, cx, cy)
+        stacked = np.concatenate(finals, axis=0)  # (n_pooled, cx, cy)
         print(f"   {approach.name}: pooled {stacked.shape[0]} envs over {len(finals)} runs")
         # visits -> seconds (50 Hz control); KL is scale-invariant, unchanged
         pooled[display] = stacked.mean(axis=0) * CONTROL_DT
 
     n = len(pooled)
     if n == 4:
-        plot_visit_heatmaps_pooled(pooled, out_path, ncols=2, figheight_in=2.0)   # the 2x2 paper figure
+        plot_visit_heatmaps_pooled(pooled, out_path, ncols=2, figheight_in=2.0)  # the 2x2 paper figure
     elif n == 5:
         # 2-2-1 with the last map centred: the 2x2 figure plus one row of the same size
         plot_visit_heatmaps_pooled(pooled, out_path, ncols=2, figheight_in=3.0)
     else:
         # One row in display order (an ablation reads left to right), colourbar below: a
         # colourbar on the right leaves too little height for its label in a single row
-        plot_visit_heatmaps_pooled(pooled, out_path, ncols=n, wrap=18 if n <= 3 else 10,
-                                   short_kl=n > 2, cbar_location="bottom")
+        plot_visit_heatmaps_pooled(
+            pooled, out_path, ncols=n, wrap=18 if n <= 3 else 10, short_kl=n > 2, cbar_location="bottom"
+        )
     print(f"wrote {out_path}")

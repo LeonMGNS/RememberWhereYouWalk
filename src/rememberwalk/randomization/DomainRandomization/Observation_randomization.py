@@ -1,8 +1,11 @@
-import jax.numpy as jnp
+"""Observation noise (``imports.observation_randomization_hanlder``)."""
+
 import jax
+import jax.numpy as jnp
 
 
 class ObsDR:
+    """Uniform observation noise, ranges from ``domain_randomization.observation``."""
 
     def __init__(
         self,
@@ -20,10 +23,12 @@ class ObsDR:
         self.last_action_ids = parameters["last_action_ids"]
         self.linear_velocity_ids = parameters["linear_velocity_ids"]
         self.angular_velocity_ids = parameters["angular_velocity_ids"]
-        self.projected_gravity_vector_ids = parameters["projected_gravity_vector_ids"] 
+        self.projected_gravity_vector_ids = parameters["projected_gravity_vector_ids"]
 
     def randomize_obs(self, obs: jnp.ndarray, key):
-
+        """Adds uniform noise to joint positions/velocities, base velocities and gravity. Returns (obs,
+        key).
+        """
         keys = jax.random.split(key, 6)
         joint_position_noise = jax.random.uniform(
             keys[0],

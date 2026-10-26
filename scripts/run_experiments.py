@@ -12,6 +12,7 @@ Stages, in this order:
 
 The render and video stages need an OpenGL context; on a headless machine set MUJOCO_GL=egl.
 """
+
 import argparse
 from pathlib import Path
 
@@ -22,7 +23,9 @@ STAGES = ["data", "plots", "render", "video"]
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--suite", default=str(CONFIG_DIR / "experiments" / "paper.yaml"), help="suite file")
     parser.add_argument("--stages", nargs="+", choices=STAGES, default=STAGES, help="stages to run")
     parser.add_argument("--force", action="store_true", help="redo rollouts whose data already exists")
@@ -38,34 +41,51 @@ def main():
 
     if "data" in args.stages:
         from rememberwalk.experiments.data_creation import create_data
+
         create_data(suite, force=args.force)
 
     if "plots" in args.stages:
         from rememberwalk.experiments.plots.bce import make_bce_figure
         from rememberwalk.experiments.plots.exploration import make_exploration_figure
         from rememberwalk.experiments.plots.heat_maps import make_heat_map_figure
-        makers = {"bce": make_bce_figure, "exploration": make_exploration_figure, "heat_maps": make_heat_map_figure}
+
+        makers = {
+            "bce": make_bce_figure,
+            "exploration": make_exploration_figure,
+            "heat_maps": make_heat_map_figure,
+        }
         for figure in suite.figures:
             if figure.kind in makers:
                 print(f"=== Figure {figure.file}: {', '.join(a.name for a in figure.approaches)}")
-                style = {k: v for k, v in (("colors", figure.colors), ("linestyles", figure.linestyles)) if v is not None}
-                makers[figure.kind](suite, output(figure.file), approaches=figure.approaches, labels=figure.labels, **style)
+                style = {
+                    k: v
+                    for k, v in (("colors", figure.colors), ("linestyles", figure.linestyles))
+                    if v is not None
+                }
+                makers[figure.kind](
+                    suite, output(figure.file), approaches=figure.approaches, labels=figure.labels, **style
+                )
 
     if "render" in args.stages:
         from rememberwalk.experiments.prediction_figure import make_prediction_figure
+
         for figure in suite.figures:
             if figure.kind == "predictions":
                 make_prediction_figure(suite, output(figure.file), approaches=figure.approaches)
 
     if "video" in args.stages:
-        from rememberwalk.experiments.live_video import record_live, assemble_video
+        from rememberwalk.experiments.live_video import assemble_video, record_live
+
         recordings = []
         for approach in suite.video_approaches:
             out_dir = suite.output_path(f"videos/{approach.slug}")
             if approach.imported:
                 # No checkpoint to re-simulate: use the recording that was imported with the data
                 if not (out_dir / "panel.mp4").is_file():
-                    print(f"** Skipping '{approach.name}' in the video: imported without a recording in {out_dir}")
+                    print(
+                        f"** Skipping '{approach.name}' in the video: "
+                        f"imported without a recording in {out_dir}"
+                    )
                     continue
                 print(f"=== Live recording: {approach.name} (imported, {out_dir})")
             else:
@@ -73,6 +93,7 @@ def main():
                 record_live(suite, approach, out_dir)
             recordings.append(out_dir)
         assemble_video(recordings, output(suite.video.get("file", "videos/maze_predictions_live.mp4")))
+
 
 if __name__ == "__main__":
     main()

@@ -1,8 +1,11 @@
+"""Model (dynamics) randomisation (``imports.model_randomization_handler``)."""
+
 import jax
 import jax.numpy as jnp
 
 
 class ModelDR:
+    """Dynamics randomisation of the MJX model, scaled with the curriculum."""
 
     def __init__(
         self,
@@ -57,7 +60,7 @@ class ModelDR:
         self.initial_stiffness = model.geom_solref[:, 1]
         self.initial_gravity = model.opt.gravity[2]
         self.initial_feet_size = model.geom_size[self.geom_size_indicies, 0]
-        self.inital_base_geom_size = model.geom_size[self.robot.base_geom_id, 0]
+        self.initial_base_geom_size = model.geom_size[self.robot.base_geom_id, 0]
         self.initial_base_geom_length = model.geom_size[self.robot.base_geom_id, 1]
         self.default_friction_tangential = model.geom_friction[self.geom_size_indicies[0], 0]
         self.default_friction_torsional = model.geom_friction[self.geom_size_indicies[0], 1]
@@ -69,44 +72,89 @@ class ModelDR:
         self.initial_lidar_geom_size = model.geom_size[self.robot.lidar_id, 0]
         self.default_timeconst = model.geom_solref[self.geom_size_indicies, 0]
 
-
-
-
     def randomize_model(self, model, key, curr_coeff):
+        """Re-samples friction, masses, inertia, gravity, damping, armature, ... of the MJX model.
+
+        Returns:
+            (model, key).
+        """
+
         def interpolate_param(initial, min_val, max_val, key):
+            """Value between initial (curriculum 0) and a uniform sample in [min_val, max_val] (curriculum
+            1).
+            """
             random_value = jax.random.uniform(key, shape=initial.shape)  # Sample in [0,1]
-            sampled_value = (1 - random_value) * min_val + random_value * max_val  # Interpolates in [min_val, max_val]
+            sampled_value = (
+                1 - random_value
+            ) * min_val + random_value * max_val  # Interpolates in [min_val, max_val]
             new_value = initial + curr_coeff * (sampled_value - initial)  # Scale deviation from initial
             return jnp.clip(new_value, min_val, max_val)
 
         keys = jax.random.split(key, 15)
 
         # Friction sampling
-        sampled_friction_tangential = self.default_friction_tangential * (1 + curr_coeff * jax.random.uniform(keys[0], minval=-self.friction_tangential_factor, maxval=self.friction_tangential_factor))
-        sampled_friction_torsional = self.default_friction_torsional * (1 + curr_coeff * jax.random.uniform(keys[1], minval=-self.friction_torsional_factor, maxval=self.friction_torsional_factor))
-        sampled_friction_rolling = self.default_friction_rolling * (1 + curr_coeff * jax.random.uniform(keys[2], minval=-self.friction_rolling_factor, maxval=self.friction_rolling_factor))
-        pair_friction = model.pair_friction.at[self.robot.pair_ids,:2].set(sampled_friction_tangential)
-        pair_friction = pair_friction.at[self.robot.pair_ids,2].set(sampled_friction_torsional)
-        pair_friction = pair_friction.at[self.robot.pair_ids,3:].set(sampled_friction_rolling)
+        sampled_friction_tangential = self.default_friction_tangential * (
+            1
+            + curr_coeff
+            * jax.random.uniform(
+                keys[0], minval=-self.friction_tangential_factor, maxval=self.friction_tangential_factor
+            )
+        )
+        sampled_friction_torsional = self.default_friction_torsional * (
+            1
+            + curr_coeff
+            * jax.random.uniform(
+                keys[1], minval=-self.friction_torsional_factor, maxval=self.friction_torsional_factor
+            )
+        )
+        sampled_friction_rolling = self.default_friction_rolling * (
+            1
+            + curr_coeff
+            * jax.random.uniform(
+                keys[2], minval=-self.friction_rolling_factor, maxval=self.friction_rolling_factor
+            )
+        )
+        pair_friction = model.pair_friction.at[self.robot.pair_ids, :2].set(sampled_friction_tangential)
+        pair_friction = pair_friction.at[self.robot.pair_ids, 2].set(sampled_friction_torsional)
+        pair_friction = pair_friction.at[self.robot.pair_ids, 3:].set(sampled_friction_rolling)
 
+        sampled_stiffness = self.default_stiffness * (
+            1
+            + curr_coeff
+            * jax.random.uniform(keys[3], minval=-self.stiffness_factor, maxval=self.stiffness_factor)
+        )
+        sampled_damping = self.default_damping * (
+            1
+            + curr_coeff
+            * jax.random.uniform(keys[4], minval=-self.damping_factor, maxval=self.damping_factor)
+        )
 
-        sampled_stiffness = self.default_stiffness * (1 + curr_coeff * jax.random.uniform(keys[3], minval=-self.stiffness_factor, maxval=self.stiffness_factor))
-        sampled_damping = self.default_damping * (1 + curr_coeff * jax.random.uniform(keys[4], minval=-self.damping_factor, maxval=self.damping_factor))
+        pair_solref = model.pair_solref.at[self.robot.pair_ids, 0].set(sampled_stiffness)
+        pair_solref = model.pair_solref.at[self.robot.pair_ids, 1].set(sampled_damping)
 
-        pair_solref = model.pair_solref.at[self.robot.pair_ids,0].set(sampled_stiffness)
-        pair_solref = model.pair_solref.at[self.robot.pair_ids,1].set(sampled_damping) 
-    
         # Log-scale, one-directional (impratio only ever goes UP from the model's default,
         # matching how it's used in practice -- MJX defaults to 1, unitree_mujoco/real
         # hardware-like contacts sit far higher). At curr_coeff=1 this covers
         # [default_impratio, default_impratio * 10**impratio_log10_range] uniformly in
         # log-space, e.g. default=1, range=2.0 -> [1, 100].
-        opt_impratio = jnp.maximum(self.default_impratio + (curr_coeff * jax.random.uniform(keys[5], minval=-self.add_impratio, maxval=self.add_impratio)), 1.0)
+        opt_impratio = jnp.maximum(
+            self.default_impratio
+            + (curr_coeff * jax.random.uniform(keys[5], minval=-self.add_impratio, maxval=self.add_impratio)),
+            1.0,
+        )
 
         # Gravity sampling
-        sampled_z_gravity = self.default_gravity * (1 + curr_coeff * jax.random.uniform(keys[6], minval=-self.z_gravity_factor, maxval=self.z_gravity_factor))
-        sampled_xy_gravity = curr_coeff * jax.random.uniform(keys[7], minval=-self.xy_gravity, maxval=self.xy_gravity, shape=(2,))
-        opt_gravity = model.opt.gravity.at[:].set(jnp.array([sampled_xy_gravity[0], sampled_xy_gravity[1], sampled_z_gravity]))
+        sampled_z_gravity = self.default_gravity * (
+            1
+            + curr_coeff
+            * jax.random.uniform(keys[6], minval=-self.z_gravity_factor, maxval=self.z_gravity_factor)
+        )
+        sampled_xy_gravity = curr_coeff * jax.random.uniform(
+            keys[7], minval=-self.xy_gravity, maxval=self.xy_gravity, shape=(2,)
+        )
+        opt_gravity = model.opt.gravity.at[:].set(
+            jnp.array([sampled_xy_gravity[0], sampled_xy_gravity[1], sampled_z_gravity])
+        )
         # Trunk mass sampling
         sampled_trunk_mass = interpolate_param(
             self.initial_trunk_mass,
@@ -131,8 +179,12 @@ class ModelDR:
             self.initial_feet_size, self.foot_size_min, self.foot_size_max, keys[8]
         )
         # Base geom size sampling
-        sampled_base_geom_size = interpolate_param(self.inital_base_geom_size, self.base_geom_size_min, self.base_geom_size_max, keys[9])
-        sampled_base_geom_length = interpolate_param(self.initial_base_geom_length, self.base_geom_length_min, self.base_geom_length_max, keys[10])
+        sampled_base_geom_size = interpolate_param(
+            self.initial_base_geom_size, self.base_geom_size_min, self.base_geom_size_max, keys[9]
+        )
+        sampled_base_geom_length = interpolate_param(
+            self.initial_base_geom_length, self.base_geom_length_min, self.base_geom_length_max, keys[10]
+        )
 
         # DoF damping sampling
         sampled_dof_damping = interpolate_param(
@@ -163,26 +215,29 @@ class ModelDR:
             keys[14],
         )
         body_ipos = model.body_ipos.at[1].set(sampled_trunk_ipos)
-        geom_size = model.geom_size.at[self.geom_size_indicies, 0].set(
-            sampled_feet_size
-        )
-        #Base Geom size and length
+        geom_size = model.geom_size.at[self.geom_size_indicies, 0].set(sampled_feet_size)
+        # Base Geom size and length
         geom_size = geom_size.at[self.robot.base_geom_id, 0].set(sampled_base_geom_size)
         geom_size = geom_size.at[self.robot.base_geom_id, 1].set(sampled_base_geom_length)
         # Lidar geom size
-        sampled_lidar_geom_size = self.initial_lidar_geom_size * (1 + curr_coeff * jax.random.uniform(keys[7], minval=-self.lidar_geom_size_factor, maxval=self.lidar_geom_size_factor))
-        geom_size = geom_size.at[self.robot.lidar_id, 0].set(sampled_lidar_geom_size) 
+        sampled_lidar_geom_size = self.initial_lidar_geom_size * (
+            1
+            + curr_coeff
+            * jax.random.uniform(
+                keys[7], minval=-self.lidar_geom_size_factor, maxval=self.lidar_geom_size_factor
+            )
+        )
+        geom_size = geom_size.at[self.robot.lidar_id, 0].set(sampled_lidar_geom_size)
         dof_damping = model.dof_damping.at[6:].set(sampled_dof_damping)
         dof_armature = model.dof_armature.at[6:].set(sampled_dof_armature)
         jn_stiffness = model.jnt_stiffness.at[1:].set(sampled_jnt_stiffness)
         dof_frictionloss = model.dof_frictionloss.at[6:].set(sampled_dof_frictionloss)
         keys = jax.random.split(key, 8)
-        
 
         model = model.replace(
             pair_friction=pair_friction,
             body_mass=model.body_mass.at[1].set(sampled_trunk_mass),
-            opt=model.opt.replace(gravity=opt_gravity,impratio=opt_impratio),
+            opt=model.opt.replace(gravity=opt_gravity, impratio=opt_impratio),
             body_inertia=model.body_inertia.at[1].set(sampled_trunk_inertia),
             body_ipos=body_ipos,
             geom_size=geom_size,
@@ -191,7 +246,5 @@ class ModelDR:
             jnt_stiffness=jn_stiffness,
             dof_frictionloss=dof_frictionloss,
             pair_solref=pair_solref,
-            
         )
         return model, keys[7]
-

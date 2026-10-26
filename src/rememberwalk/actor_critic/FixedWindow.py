@@ -1,14 +1,21 @@
+"""FixedWindow baseline (``actor_critic.FixedWindow.ActorCritic``).
+
+An MLP over the flattened history window.
+"""
+
+import flax
+import flax.linen as nn
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
-import flax
-from rememberwalk.actor_critic.history import HistoryActorCritic
+
 # TrainingState and Transition are shared with the Transformer
-from rememberwalk.actor_critic.history import TrainingState, Transition  # noqa: F401
+from rememberwalk.actor_critic.history import HistoryActorCritic, TrainingState, Transition  # noqa: F401
 
 
 @flax.struct.dataclass
 class Params:
+    """Network parameters. Field names are part of the checkpoint format: do not rename."""
+
     policy_parameters: jnp.ndarray
     value_parameters: jnp.ndarray
     fixed_window_parameters: jnp.ndarray
@@ -29,6 +36,7 @@ class FixedWindowEncoder(nn.Module):
     layer sees ``sequence_length * window_input_size`` inputs (e.g. 10 * 600 =
     6000). The LayerNorm after the flatten keeps that wide input well-scaled.
     """
+
     memory_output_features: int
     layer_sizes: tuple = (512, 256)
 
@@ -45,27 +53,32 @@ class FixedWindowEncoder(nn.Module):
 
 
 class ActorCritic(HistoryActorCritic):
+    """FixedWindow actor-critic; ``config`` is the actor-critic dict of ``generate_setup``."""
 
     def __init__(self, config: dict):
         super().__init__()
-        actor_observation_size            = config["actor_observation_size"]
-        actor_output_size                 = config["actor_output_size"]
-        value_observation_size            = config["value_observation_size"]
-        height_sample_size                = config["height_sample_size"]
-        critic_height_sample_size         = config["critic_height_sample_size"]
-        height_encoder_size               = config["height_encoder_size"]
-        distribution_size                 = config["distribution_size"]
+        actor_observation_size = config["actor_observation_size"]
+        actor_output_size = config["actor_output_size"]
+        value_observation_size = config["value_observation_size"]
+        height_sample_size = config["height_sample_size"]
+        critic_height_sample_size = config["critic_height_sample_size"]
+        height_encoder_size = config["height_encoder_size"]
+        distribution_size = config["distribution_size"]
         # Window-encoder dims. Falls back to the transformer config keys so the
         # exact same config used for the transformer works here unchanged.
-        window_sequence_length            = config.get("fixed_window_sequence_length", config["transformer_sequence_length"])
-        window_memory_output_features     = config.get("fixed_window_memory_output_features", config["transformer_memory_output_features"])
-        window_layer_sizes                = tuple(config.get("fixed_window_layer_sizes", [512, 256]))
-        min_scale                         = config.get("min_scale", 0.001)
-        max_scale                         = config.get("max_scale", 2.0)
-        seed                              = config.get("seed", 0)
-        actor_layer_sizes                 = config.get("actor_layer_sizes", [512, 256, 128])
-        critic_layer_sizes                = config.get("critic_layer_sizes", [512, 256, 128])
-        actor_height_encoder_layer_sizes  = config.get("actor_height_encoder_layer_sizes", [256, 128])
+        window_sequence_length = config.get(
+            "fixed_window_sequence_length", config["transformer_sequence_length"]
+        )
+        window_memory_output_features = config.get(
+            "fixed_window_memory_output_features", config["transformer_memory_output_features"]
+        )
+        window_layer_sizes = tuple(config.get("fixed_window_layer_sizes", [512, 256]))
+        min_scale = config.get("min_scale", 0.001)
+        max_scale = config.get("max_scale", 2.0)
+        seed = config.get("seed", 0)
+        actor_layer_sizes = config.get("actor_layer_sizes", [512, 256, 128])
+        critic_layer_sizes = config.get("critic_layer_sizes", [512, 256, 128])
+        actor_height_encoder_layer_sizes = config.get("actor_height_encoder_layer_sizes", [256, 128])
         critic_height_encoder_layer_sizes = config.get("critic_height_encoder_layer_sizes", [512, 256])
 
         self.min_scale = min_scale
@@ -90,8 +103,14 @@ class ActorCritic(HistoryActorCritic):
 
         # Init actor, critic, height encoders and heads
         self.init_shared_networks(
-            keys={"actor": init_keys[0], "critic": init_keys[1], "cross_entropy": init_keys[3], "linear_velocity": init_keys[4],
-                  "height_encoder": init_keys[6], "critic_height_encoder": init_keys[7]},
+            keys={
+                "actor": init_keys[0],
+                "critic": init_keys[1],
+                "cross_entropy": init_keys[3],
+                "linear_velocity": init_keys[4],
+                "height_encoder": init_keys[6],
+                "critic_height_encoder": init_keys[7],
+            },
             actor_memory_size=window_memory_output_features,
             head_memory_size=self.window_memory_output_features,
             actor_layer_sizes=actor_layer_sizes,
@@ -126,4 +145,5 @@ class ActorCritic(HistoryActorCritic):
         )
 
     def encode_history(self, parameters: Params, observation_history: jnp.ndarray) -> jnp.ndarray:
+        """(batch, sequence_length, history_input_size) -> (batch, memory_output_features)."""
         return self.fixed_window_encoder.apply(parameters.fixed_window_parameters, observation_history)

@@ -5,6 +5,7 @@ fixed-seed workload and compare the result against golden files recorded on the
 ``pre-cleanup`` tag. Golden files are hardware and JAX-version specific: record them with
 ``pytest tests --update-golden`` on the machine you test on, before changing any code.
 """
+
 from copy import deepcopy
 from pathlib import Path
 
@@ -76,13 +77,17 @@ def run_deterministic_eval(trainer, params) -> dict:
     key = jax.random.PRNGKey(SEED)
     reset_keys = jax.random.split(key, trainer.nr_eval_envs)
     key, _ = jax.random.split(key)
-    state = jax.vmap(trainer.jitted_reset_function, (None, None, 0))(CURR_COEFF, TERRAIN_CURR_COEFF, reset_keys)
+    state = jax.vmap(trainer.jitted_reset_function, (None, None, 0))(
+        CURR_COEFF, TERRAIN_CURR_COEFF, reset_keys
+    )
     eval_dict = deepcopy(trainer.eval_dict)
     eval_dict["state"] = state
     eval_dict["parameters"] = params
     eval_dict["action"] = jnp.zeros((trainer.nr_eval_envs, trainer.actor_critic.action_size))
     if hasattr(trainer.actor_critic, "distribution_size"):
-        eval_dict["predicted_distribution"] = jnp.zeros((trainer.nr_eval_envs, trainer.actor_critic.distribution_size))
+        eval_dict["predicted_distribution"] = jnp.zeros(
+            (trainer.nr_eval_envs, trainer.actor_critic.distribution_size)
+        )
         eval_dict["pred_delta_loc"] = jnp.zeros((trainer.nr_eval_envs, 3))
     metrics, episode_lengths, summed_rewards = trainer.evaluation_function(eval_dict, key)
     out = {f"metrics/{k}": v for k, v in metrics.items()}
@@ -99,16 +104,45 @@ def run_experiment_eval(setup, trainer, params) -> dict:
     key = jax.random.PRNGKey(SEED)
     reset_keys = jax.random.split(key, trainer.nr_eval_envs)
     key, _ = jax.random.split(key)
-    state = jax.vmap(trainer.jitted_reset_function, (None, None, 0))(CURR_COEFF, TERRAIN_CURR_COEFF, reset_keys)
-    eval_dict = build_eval_dict(setup["training"], state, trainer.nr_eval_envs, trainer.actor_critic.action_size)
+    state = jax.vmap(trainer.jitted_reset_function, (None, None, 0))(
+        CURR_COEFF, TERRAIN_CURR_COEFF, reset_keys
+    )
+    eval_dict = build_eval_dict(
+        setup["training"], state, trainer.nr_eval_envs, trainer.actor_critic.action_size
+    )
     eval_dict["parameters"] = params
     environment = trainer.environment
-    eval_dict, metrics, _ = evaluation_fn(eval_dict, key, environment, trainer.actor_critic, environment.step,
-                                          setup["training"]["experiment_callback"])
+    eval_dict, metrics, _ = evaluation_fn(
+        eval_dict,
+        key,
+        environment,
+        trainer.actor_critic,
+        environment.step,
+        setup["training"]["experiment_callback"],
+    )
     out = {f"metrics/{k}": v for k, v in metrics.items()}
     out["episode_lengths"] = eval_dict["episode_lengths"]
     out["summed_rewards"] = eval_dict["summed_rewards"]
     return to_numpy(out)
+
+
+def run_visualizer_steps(setup, trainer, n_steps: int = 3) -> dict:
+    """Single-env loop of scripts/visualize.py: the callback gets the jitted get_deterministic_action."""
+    environment, actor_critic = trainer.environment, trainer.actor_critic
+    visualizer_dict = dict(setup["visualizer"]["visualizer_dict"])
+    visualizer_dict["env"] = environment
+    visualizer_dict["parameters"] = trainer.initial_training_state.params
+    key = jax.random.PRNGKey(SEED)
+    state = jax.jit(environment.reset)(CURR_COEFF, TERRAIN_CURR_COEFF, key)
+    visualizer_dict["state"] = state.replace(done=jnp.array(True, jnp.bool_))
+    action_jit = jax.jit(actor_critic.get_deterministic_action)
+    step_jit = jax.jit(environment.step)
+    callback = setup["visualizer"]["visualizer_callback_function"]
+    for _ in range(n_steps):
+        visualizer_dict, key = callback(action_jit, visualizer_dict, key)
+        state, key = step_jit(visualizer_dict["state"], visualizer_dict["action"], key)
+        visualizer_dict["state"] = state
+    return visualizer_dict
 
 
 def run_training_epoch(trainer) -> dict:
@@ -116,9 +150,12 @@ def run_training_epoch(trainer) -> dict:
     key = jax.random.PRNGKey(SEED)
     reset_keys = jax.random.split(key, trainer.nr_envs)
     key, _ = jax.random.split(key)
-    env_state = jax.vmap(trainer.jitted_reset_function, (None, None, 0))(CURR_COEFF, TERRAIN_CURR_COEFF, reset_keys)
+    env_state = jax.vmap(trainer.jitted_reset_function, (None, None, 0))(
+        CURR_COEFF, TERRAIN_CURR_COEFF, reset_keys
+    )
     env_state, training_state, key, optimize_metrics, training_metrics, summed_reward, episode_length = (
-        trainer.jitted_training_epoch(env_state, trainer.initial_training_state, key))
+        trainer.jitted_training_epoch(env_state, trainer.initial_training_state, key)
+    )
     out = {f"optimize/{k}": v for k, v in optimize_metrics.items()}
     out.update({f"rollout/{k}": v for k, v in training_metrics.items()})
     out["summed_reward"] = summed_reward
@@ -137,15 +174,20 @@ def flatten(tree) -> dict:
 def param_signature(params) -> dict:
     """Shape, dtype and value checksums per parameter leaf (small enough to keep in git)."""
     return {
-        name: {"shape": list(np.shape(leaf)), "dtype": str(np.asarray(leaf).dtype),
-               **{k: float(v) for k, v in _leaf_checksum(leaf).items()}}
+        name: {
+            "shape": list(np.shape(leaf)),
+            "dtype": str(np.asarray(leaf).dtype),
+            **{k: float(v) for k, v in _leaf_checksum(leaf).items()},
+        }
         for name, leaf in flatten(params).items()
     }
 
 
 def checksums(params) -> dict:
     """``{"<leaf>/sum": ..., "<leaf>/abs_sum": ...}`` as arrays, for npz golden files."""
-    return {f"{name}/{k}": v for name, leaf in flatten(params).items() for k, v in _leaf_checksum(leaf).items()}
+    return {
+        f"{name}/{k}": v for name, leaf in flatten(params).items() for k, v in _leaf_checksum(leaf).items()
+    }
 
 
 def _leaf_checksum(leaf) -> dict:

@@ -15,13 +15,13 @@ so all figures and the video use the same colour per approach.
 # --------------------------------------------------------------------------
 # Page geometry from ieeeconf.cls
 # --------------------------------------------------------------------------
-TEXTWIDTH_IN = 7.0                                  # \textwidth
-COLUMNSEP_IN = 0.2                                  # \columnsep
-COLWIDTH_IN = (TEXTWIDTH_IN - COLUMNSEP_IN) / 2.0   # = 3.4in, single column
-FIGWIDTH_IN = COLWIDTH_IN - 0.02                    # hair under, avoids overfull hbox
+TEXTWIDTH_IN = 7.0  # \textwidth
+COLUMNSEP_IN = 0.2  # \columnsep
+COLWIDTH_IN = (TEXTWIDTH_IN - COLUMNSEP_IN) / 2.0  # = 3.4in, single column
+FIGWIDTH_IN = COLWIDTH_IN - 0.02  # hair under, avoids overfull hbox
 
 # Font sizes (pt) from the class file's 10pt branch
-FS_NORMAL, FS_SMALL, FS_FOOTNOTE, FS_SCRIPT = 10, 9,8,8
+FS_NORMAL, FS_SMALL, FS_FOOTNOTE, FS_SCRIPT = 10, 9, 8, 8
 
 # Control frequency of the sim: one step = CONTROL_DT seconds
 CONTROL_FREQ_HZ = 50
@@ -29,9 +29,9 @@ CONTROL_DT = 1.0 / CONTROL_FREQ_HZ
 
 # Policies within an approach are separated by dash pattern only.
 POLICY_LINESTYLES = [
-    (0, ()),            # solid
-    (0, (4, 1.5)),      # dashed
-    (0, (1, 1.2)),      # dotted
+    (0, ()),  # solid
+    (0, (4, 1.5)),  # dashed
+    (0, (1, 1.2)),  # dotted
 ]
 
 # Named dash patterns a suite figure can assign per approach ('linestyles:'),
@@ -70,7 +70,7 @@ RC = {
     "legend.handletextpad": 0.4,
     "legend.columnspacing": 1.0,
     "legend.borderaxespad": 0.0,
-    "pdf.fonttype": 42,   # embed TrueType; keeps text selectable/searchable
+    "pdf.fonttype": 42,  # embed TrueType; keeps text selectable/searchable
     "ps.fonttype": 42,
     "savefig.bbox": "tight",
     "savefig.pad_inches": 0.005,

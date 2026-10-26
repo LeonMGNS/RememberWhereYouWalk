@@ -1,9 +1,12 @@
-import jax.numpy as jnp
+"""Auxiliary heads trained next to PPO: linear velocity estimation and maze map reconstruction."""
+
 import flax.linen as nn
+import jax.numpy as jnp
 from flax.linen.initializers import constant, orthogonal
 
 
 class LinearVelocityHead(nn.Module):
+    """(batch, actor_observation_size) -> (batch, 3) estimated base linear velocity."""
 
     @nn.compact
     def __call__(self, data):
@@ -22,6 +25,8 @@ class LinearVelocityHead(nn.Module):
 
 
 class CrossEntropyHead(nn.Module):
+    """(batch, input) -> (batch, distribution_size) wall logits of the maze map, clipped to [-10, 10]."""
+
     distribution_size: int
 
     @nn.compact

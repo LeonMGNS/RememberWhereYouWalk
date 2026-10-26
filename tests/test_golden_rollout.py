@@ -4,10 +4,16 @@ The deterministic evaluation covers reset, observation, domain randomization, re
 curriculum, terrain and the eval callback. The training epoch additionally covers trajectory
 collection, the loss function and the optimizer.
 """
+
 import numpy as np
 import pytest
-
-from harness import CONFIGS, run_deterministic_eval, run_experiment_eval, run_training_epoch
+from harness import (
+    CONFIGS,
+    run_deterministic_eval,
+    run_experiment_eval,
+    run_training_epoch,
+    run_visualizer_steps,
+)
 
 pytestmark = pytest.mark.slow
 
@@ -31,7 +37,23 @@ def test_deterministic_eval(name, build_cache, golden):
 def test_experiment_eval(name, build_cache, golden):
     """The experiment_callback rollout that writes the paper's eval_data.pkl."""
     setup, _, trainer = build_cache(name)
-    golden(f"experiment_eval/{name}.npz", run_experiment_eval(setup, trainer, trainer.initial_training_state.params))
+    golden(
+        f"experiment_eval/{name}.npz",
+        run_experiment_eval(setup, trainer, trainer.initial_training_state.params),
+    )
+
+
+@pytest.mark.parametrize("name", CONFIGS)
+def test_visualizer_callback(name, build_cache):
+    """scripts/visualize.py's single-env loop runs for every approach.
+
+    No golden: the viewer is interactive, only the callback contract is checked.
+    """
+    setup, _, trainer = build_cache(name)
+    visualizer_dict = run_visualizer_steps(setup, trainer)
+    action = np.asarray(visualizer_dict["action"])
+    assert action.shape == (trainer.actor_critic.action_size,)
+    assert np.all(np.isfinite(action))
 
 
 @pytest.mark.parametrize("name", CONFIGS)

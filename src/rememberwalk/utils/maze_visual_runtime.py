@@ -18,8 +18,8 @@ Wall edges are then exactly as coarse as the collision geometry, which is the
 point: the colour boundary lands on the same grid line as the wall itself.
 """
 
-import numpy as np
 import mujoco
+import numpy as np
 
 # flip_rows is the default: a texture's first row is its TOP, while hfield row 0
 # sits at minimum y. That is a pure vertical flip and is a MuJoCo convention, so
@@ -29,19 +29,19 @@ import mujoco
 # for which corner of the hfield the first texel lands on. A maze boundary frame
 # is invariant under all eight, so a correct-looking border proves nothing.
 ORIENTS = {
-    "identity":       lambda m: m,
-    "flip_rows":      lambda m: m[::-1],
-    "flip_cols":      lambda m: m[:, ::-1],
-    "rot180":         lambda m: m[::-1, ::-1],
-    "transpose":      lambda m: m.T,
-    "rot90":          lambda m: np.rot90(m),
-    "rot270":         lambda m: np.rot90(m, 3),
+    "identity": lambda m: m,
+    "flip_rows": lambda m: m[::-1],
+    "flip_cols": lambda m: m[:, ::-1],
+    "rot180": lambda m: m[::-1, ::-1],
+    "transpose": lambda m: m.T,
+    "rot90": lambda m: np.rot90(m),
+    "rot270": lambda m: np.rot90(m, 3),
     "anti_transpose": lambda m: np.rot90(m, 2).T,
 }
 
 # seaborn "colorblind" palette
-WALL_RGB = (222, 143, 5)       # #de8f05 orange
-FLOOR_RGB = (85, 85, 85)       # #555555 grey
+WALL_RGB = (222, 143, 5)  # #de8f05 orange
+FLOOR_RGB = (85, 85, 85)  # #555555 grey
 
 # Alternatives from the same palette:
 #   sky blue (86, 180, 233) | green (2, 158, 115) | yellow (236, 225, 51)
@@ -50,9 +50,16 @@ FLOOR_RGB = (85, 85, 85)       # #555555 grey
 class MazePainter:
     """Paints model.tex_data from model.hfield_data, one texel per height."""
 
-    def __init__(self, model, hfield_name="empty_hfield", tex_name="maze_tex",
-                 rel_threshold=0.5, wall_rgb=WALL_RGB, floor_rgb=FLOOR_RGB,
-                 orient="flip_rows"):
+    def __init__(
+        self,
+        model,
+        hfield_name="empty_hfield",
+        tex_name="maze_tex",
+        rel_threshold=0.5,
+        wall_rgb=WALL_RGB,
+        floor_rgb=FLOOR_RGB,
+        orient="flip_rows",
+    ):
         self.tid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TEXTURE, tex_name)
         self.hid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_HFIELD, hfield_name)
         if self.tid < 0:
@@ -92,7 +99,7 @@ class MazePainter:
     # -- mask ---------------------------------------------------------------
     def wall_flat(self, model):
         """Flat boolean wall mask, same order and length as hfield_data."""
-        h = np.asarray(model.hfield_data[self.hadr:self.hadr + self.n])
+        h = np.asarray(model.hfield_data[self.hadr : self.hadr + self.n])
         hmax = float(h.max()) if h.size else 0.0
         if hmax <= 0.0:
             return np.zeros(self.n, bool)
@@ -104,11 +111,12 @@ class MazePainter:
     # -- painting -----------------------------------------------------------
     def _write(self, model, wall_flat):
         buf = np.empty((self.n, self.nch), np.uint8)
-        buf[:, :3] = np.where(np.asarray(wall_flat, bool)[:, None],
-                              np.array(self.wall_rgb), np.array(self.floor_rgb))
+        buf[:, :3] = np.where(
+            np.asarray(wall_flat, bool)[:, None], np.array(self.wall_rgb), np.array(self.floor_rgb)
+        )
         if self.nch == 4:
             buf[:, 3] = 255
-        model.tex_data[self.tadr:self.tadr + self.n * self.nch] = buf.ravel()
+        model.tex_data[self.tadr : self.tadr + self.n * self.nch] = buf.ravel()
 
     def _upload(self, model, renderer=None, viewer=None):
         # Without this the new bytes exist only CPU-side and the render still
@@ -125,10 +133,12 @@ class MazePainter:
         """Repaint if the heightfield changed. Returns True if it repainted."""
         wall = self.wall_flat(model)
         if not self._warned and wall.sum() == 0:
-            h = np.asarray(model.hfield_data[self.hadr:self.hadr + self.n])
-            print(f"** MazePainter: wall mask is EMPTY -> everything paints as floor. "
-                  f"hfield min/max = {h.min():.6g}/{h.max():.6g}. If max <= 0 the "
-                  f"heightfield reaching this model has no maze in it.")
+            h = np.asarray(model.hfield_data[self.hadr : self.hadr + self.n])
+            print(
+                f"** MazePainter: wall mask is EMPTY -> everything paints as floor. "
+                f"hfield min/max = {h.min():.6g}/{h.max():.6g}. If max <= 0 the "
+                f"heightfield reaching this model has no maze in it."
+            )
             self._warned = True
 
         key = wall.tobytes()
@@ -139,8 +149,7 @@ class MazePainter:
         self._upload(model, renderer, viewer)
         return True
 
-    def paint_values(self, model, values, wall_rgb=None, floor_rgb=None,
-                     renderer=None, viewer=None):
+    def paint_values(self, model, values, wall_rgb=None, floor_rgb=None, renderer=None, viewer=None):
         """Per-cell colour interpolation: 0 -> floor colour, 1 -> wall colour.
 
         values must hold nrow*ncol numbers in hfield_data order (same flat
@@ -148,20 +157,15 @@ class MazePainter:
         orientation setting, so no separate flipping is needed. Used to shade
         predicted walls by certainty instead of thresholding.
         """
-        v = np.clip(np.asarray(values, float).reshape(self.nrow, self.ncol),
-                    0.0, 1.0)
+        v = np.clip(np.asarray(values, float).reshape(self.nrow, self.ncol), 0.0, 1.0)
         v = ORIENTS[self.orient](v).ravel()
-        w = np.asarray(wall_rgb if wall_rgb is not None else self.wall_rgb,
-                       float)
-        f = np.asarray(floor_rgb if floor_rgb is not None else self.floor_rgb,
-                       float)
+        w = np.asarray(wall_rgb if wall_rgb is not None else self.wall_rgb, float)
+        f = np.asarray(floor_rgb if floor_rgb is not None else self.floor_rgb, float)
         buf = np.zeros((self.n, self.nch), np.uint8)
         buf[:, :3] = np.round(f[None, :] + v[:, None] * (w - f)[None, :])
         if self.nch == 4:
             buf[:, 3] = 255
-        model.tex_data[self.tadr:self.tadr + self.n * self.nch] = buf.ravel()
+        model.tex_data[self.tadr : self.tadr + self.n * self.nch] = buf.ravel()
         self._upload(model, renderer, viewer)
         self._last = None
         return True
-
-

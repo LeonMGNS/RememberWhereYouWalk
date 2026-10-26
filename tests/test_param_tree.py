@@ -3,9 +3,9 @@
 Catches renamed Params fields, changed layer structure (breaks loading the paper checkpoints)
 and changed PRNG key usage during initialisation (breaks reproducing the paper runs).
 """
+
 import jax
 import pytest
-
 from harness import CONFIGS, flatten, param_signature
 
 
@@ -19,8 +19,10 @@ def test_initial_params(name, build_cache, golden):
 def test_training_state_layout(name, build_cache, golden):
     """Shapes of the full TrainingState (optimizer state, memory buffers), no values."""
     setup, _, _ = build_cache(name)
-    layout = {path: {"shape": list(leaf.shape), "dtype": str(leaf.dtype)}
-              for path, leaf in flatten(setup["training"]["training_state"]).items()}
+    layout = {
+        path: {"shape": list(leaf.shape), "dtype": str(leaf.dtype)}
+        for path, leaf in flatten(setup["training"]["training_state"]).items()
+    }
     golden(f"training_state/{name}.json", layout)
 
 

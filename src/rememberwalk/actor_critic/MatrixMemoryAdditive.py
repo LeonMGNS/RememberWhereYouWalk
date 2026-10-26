@@ -1,12 +1,21 @@
-import jax.numpy as jnp
+"""LSMM ablation "additive" (``actor_critic.MatrixMemoryAdditive.ActorCritic``): no calibration network F.
+
+The memory window is updated as M <- (M + G(x)) / (max + 0.02); everything else is the LSMM.
+"""
+
 import flax
+import jax.numpy as jnp
+
 from rememberwalk.actor_critic import MatrixMemory
+
 # TrainingState and Transition have the same fields as for LSMM
 from rememberwalk.actor_critic.MatrixMemory import TrainingState, Transition, WindowUpdateMLP  # noqa: F401
 
 
 @flax.struct.dataclass
 class Params:
+    """LSMM parameters without ``f_parameters``. Field names are part of the checkpoint format."""
+
     policy_parameters: jnp.ndarray
     value_parameters: jnp.ndarray
     cross_entropy_params: jnp.ndarray
@@ -21,10 +30,12 @@ class ActorCritic(MatrixMemory.ActorCritic):
     """LSMM ablation without the calibration function F: the memory update is M <- M + G(x)."""
 
     def init_update_networks(self, init_keys):
+        """Builds only G, with the same key as in the LSMM."""
         self.G = WindowUpdateMLP(self.matrix_memory_update_window_size)
-        self.init_G_nn_params = self.G.init(init_keys[13],jnp.zeros((1,self.update_input_size)))
+        self.init_G_nn_params = self.G.init(init_keys[13], jnp.zeros((1, self.update_input_size)))
 
     def make_params_and_labels(self):
+        """Returns (Params, optimizer labels) without F."""
         params = Params(
             policy_parameters=self.init_actor_nn_params,
             value_parameters=self.init_critic_nn_params,
@@ -35,10 +46,19 @@ class ActorCritic(MatrixMemory.ActorCritic):
             matrix_memory_encoder_parameters=self.init_matrix_memory_encoder_nn_params,
             linear_velocity_parameters=self.init_linear_velocity_head_nn_params,
         )
-        labels = Params(policy_parameters="actor",value_parameters="critic",cross_entropy_params="head",height_encoder_parameters="actor",critic_height_encoder_parameters="critic",g_parameters="actor",matrix_memory_encoder_parameters="actor",linear_velocity_parameters="head")
+        labels = Params(
+            policy_parameters="actor",
+            value_parameters="critic",
+            cross_entropy_params="head",
+            height_encoder_parameters="actor",
+            critic_height_encoder_parameters="critic",
+            g_parameters="actor",
+            matrix_memory_encoder_parameters="actor",
+            linear_velocity_parameters="head",
+        )
         return params, labels
 
-    def apply_window_update(self, parameters:Params, local_memory:jnp.ndarray, make_update_input):
-        update_matrix = self.G.apply(parameters.g_parameters,make_update_input()).reshape(local_memory.shape)
+    def apply_window_update(self, parameters: Params, local_memory: jnp.ndarray, make_update_input):
+        """M_local <- M_local + G(x)."""
+        update_matrix = self.G.apply(parameters.g_parameters, make_update_input()).reshape(local_memory.shape)
         return local_memory + update_matrix
-

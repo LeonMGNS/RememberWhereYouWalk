@@ -1,4 +1,9 @@
+"""PD control of the robot joints (``imports.control_handler``)."""
+
+
 class PDControl:
+    """Joint PD controller: action -> joint torques, with the domain-randomised gain and strength factors."""
+
     def __init__(
         self,
         robot,
@@ -19,11 +24,11 @@ class PDControl:
         extrinsic_motor_strength,
         extrinsic_position_offset,
     ):
-        """
-        Computes joint torques using a PD control law with extrinsic randomization factors.
-        Scales the input action, computes target joint positions, and applies proportional and derivative control
-        using both intrinsic and extrinsic gain factors. Adds an extrinsic position offset and scales the resulting
-        torques by the extrinsic motor strength.
+        """Computes joint torques with a PD law and the domain-randomised (extrinsic) factors.
+
+        The action is scaled to joint position targets around the nominal pose. The PD gains are the robot's
+        gains times the extrinsic gain factors; the extrinsic position offset is added to the targets and the
+        torques are scaled by the extrinsic motor strength.
 
         Args:
             data: MJX pipeline state containing current joint positions and velocities.
@@ -41,11 +46,7 @@ class PDControl:
         torques = (
             self.p_gain
             * extrinsic_p_gain_factor
-            * (
-                target_joint_positions
-                - data.qpos[self.joint_qpos_adr]
-                + extrinsic_position_offset
-            )
+            * (target_joint_positions - data.qpos[self.joint_qpos_adr] + extrinsic_position_offset)
             - self.d_gain * extrinsic_d_gain_factor * data.qvel[self.joint_qvel_adr]
         )
         torques = torques * extrinsic_motor_strength

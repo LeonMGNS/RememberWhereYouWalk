@@ -1,8 +1,12 @@
-import jax.numpy as jnp
+"""Push perturbations (``imports.pertubation_randomization_handler``)."""
+
 import jax
+import jax.numpy as jnp
 
 
 class DefaultDomainPerturbation:
+    """Random pushes of the base (velocity kicks), scaled with the curriculum."""
+
     def __init__(self, parameters):
         self.push_velocity_x_min = parameters["push_velocity_x_min"]
         self.push_velocity_x_max = parameters["push_velocity_x_max"]
@@ -14,6 +18,7 @@ class DefaultDomainPerturbation:
         self.additive_multiplier = parameters["additive_multiplier"]
 
     def sample(self, data, key, curr_coef):
+        """Pushes the base: adds (``add_chance``) or sets a random linear velocity. Returns (data, key)."""
         _, key = jax.random.split(key)
         sampled_push_velocity_x = jax.random.uniform(
             key, minval=self.push_velocity_x_min, maxval=self.push_velocity_x_max
@@ -51,8 +56,6 @@ class DefaultDomainPerturbation:
             )
 
         _, key = jax.random.split(key)
-        qvel = jax.lax.cond(
-            jax.random.uniform(key) < self.add_chance, true_func, false_func
-        )
+        qvel = jax.lax.cond(jax.random.uniform(key) < self.add_chance, true_func, false_func)
         data = data.replace(qvel=data.qvel.at[0:3].set(qvel))
         return data, key

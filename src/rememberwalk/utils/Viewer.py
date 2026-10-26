@@ -1,12 +1,15 @@
+"""Interactive MuJoCo viewer used by scripts/visualize.py."""
+
 import mujoco
-from mujoco import viewer
-from mujoco import mjx
+from mujoco import mjx, viewer
 
 
 class Viewer:
+    """Passive MuJoCo viewer that mirrors an MJX state (and its height field)."""
 
     def __init__(self, model, data, render_callback=None) -> None:
-        """Viewer class to viusalize the simulaiton. This class is suitable to viusalize mjx environments in which also multiple simulations are run at the same time
+        """Viewer class to viusalize the simulaiton. This class is suitable to viusalize mjx environments in
+        which also multiple simulations are run at the same time
 
         Args:
             model (_type_): _description_
@@ -14,19 +17,25 @@ class Viewer:
         """
         if render_callback is not None:
             self.viewer = viewer.launch_passive(
-                model, data, key_callback=render_callback,show_left_ui=False,show_right_ui=False,
+                model,
+                data,
+                key_callback=render_callback,
+                show_left_ui=False,
+                show_right_ui=False,
             )
         else:
-            self.viewer = viewer.launch_passive(model, data,show_left_ui=False,show_right_ui=False)
+            self.viewer = viewer.launch_passive(model, data, show_left_ui=False, show_right_ui=False)
         self.model = model
         self.state = data
 
-    def update(self, sim_state: mjx.Data,model :mjx.Model, simulation: int = -1):
+    def update(self, sim_state: mjx.Data, model: mjx.Model, simulation: int = -1):
         """Update the viewer with the new simulation state.
 
         Args:
-            sim_state (mjx.Data): State of the simulation. Here it is assumed that the mjx.data State could be parralelized using jax vmap ...
-            simulation (int, optional): If jax was used to parallelize the simulation, simulation is taken to decide which environment to visualize. If no parrallelizaiont pass -1 or nothing. Defaults to -1.
+            sim_state (mjx.Data): State of the simulation. Here it is assumed that the mjx.data State could be
+            parralelized using jax vmap ...
+            simulation (int, optional): If jax was used to parallelize the simulation, simulation is taken to
+            decide which environment to visualize. If no parrallelizaiont pass -1 or nothing. Defaults to -1.
         """
         if simulation == -1:
             self.state.qpos = sim_state.qpos
@@ -39,4 +48,3 @@ class Viewer:
             self.state.xpos = sim_state.xpos[simulation]
         mujoco.mj_forward(self.model, self.state)
         self.viewer.sync()
-    

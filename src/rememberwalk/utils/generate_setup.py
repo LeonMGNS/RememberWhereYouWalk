@@ -1,30 +1,42 @@
-import importlib
-import numpy as np
-import jax.numpy as jnp
-from mujoco import mjx
-from typing import Any, Optional
+"""Builds every object of a run from a (resolved) config dict.
 
-def _resolve_import(import_path: Optional[str]) -> Any:
+The ``imports`` section names the classes and functions (paths relative to the ``rememberwalk``
+package); the other sections hold their parameters. ``generate_setup`` returns the ``env``, ``training``
+and ``visualizer`` setup dicts used by scripts/train.py, scripts/visualize.py, the experiments and the
+tests.
+"""
+
+import importlib
+from typing import Any
+
+import jax.numpy as jnp
+import numpy as np
+from mujoco import mjx
+
+
+def _resolve_import(import_path: str | None) -> Any:
+    """``"module.path.Name"`` (relative to ``rememberwalk``) -> the object; None for an empty entry."""
     if not import_path:
         return None
-        
+
     # Ensure the required base package prefix is present
     prefix = "rememberwalk."
     if not import_path.startswith(prefix):
         import_path = prefix + import_path
-        
+
     try:
-        module_path, obj_name = import_path.rsplit('.', 1)
+        module_path, obj_name = import_path.rsplit(".", 1)
         module = importlib.import_module(module_path)
         return getattr(module, obj_name)
     except (ValueError, ImportError, AttributeError) as e:
-        print(f"Warning: Could not resolve import '{import_path}': {e}")
-        return None
+        # A typo in a config would otherwise surface much later as a NoneType error
+        raise ImportError(f"Could not resolve config import '{import_path}': {e}") from e
+
 
 def generate_setup(config_dict: dict) -> dict:
     """
-    Initializes modules, environment states, and the overall configuration 
-    dictionary. Defaults are set to None so the run will immediately fail 
+    Initializes modules, environment states, and the overall configuration
+    dictionary. Defaults are set to None so the run will immediately fail
     if an essential configuration parameter is missing.
     """
     # 1. Safe Section Extraction (keep {} here only to prevent AttributeError on .get() calls below)
@@ -32,7 +44,7 @@ def generate_setup(config_dict: dict) -> dict:
     env_cfg = config_dict.get("env", {})
     robot_cfg = config_dict.get("robot", {})
     arch_cfg = config_dict.get("architecture", {})
-    mem_cfg = arch_cfg.get("memory",{})
+    mem_cfg = arch_cfg.get("memory", {})
     curr_cfg = config_dict.get("curriculum", {})
     terrain_cfg = config_dict.get("terrain", {})
     reward_cfg = config_dict.get("reward", {})
@@ -63,7 +75,7 @@ def generate_setup(config_dict: dict) -> dict:
     deterministic_eval_callback = _resolve_import(imports_cfg.get("deterministic_eval_callback"))
     experiment_callback = _resolve_import(imports_cfg.get("experiment_callback"))
 
-    # 3. Compute Derived Variables 
+    # 3. Compute Derived Variables
     hm_res = terrain_cfg.get("height_map_resolution")
     hm_x = terrain_cfg.get("height_map_grid_x_length")
     hm_y = terrain_cfg.get("height_map_grid_y_length")
@@ -78,15 +90,14 @@ def generate_setup(config_dict: dict) -> dict:
     c_res = c_window * hm_res
     critic_nr_height_map_points = int(((2 * c_hm_x) / c_res) * ((2 * c_hm_y) / c_res))
 
-    maze_rows = terrain_cfg.get("maze_rows",0)
-    maze_cols = terrain_cfg.get("maze_cols",0)
-    space_cell = terrain_cfg.get("space_maze_cell",0)
-    nr_mazes = train_cfg.get("nr_mazes",0)
+    maze_rows = terrain_cfg.get("maze_rows", 0)
+    maze_cols = terrain_cfg.get("maze_cols", 0)
+    space_cell = terrain_cfg.get("space_maze_cell", 0)
+    nr_mazes = train_cfg.get("nr_mazes", 0)
     if "proprioception" in terrain_cfg:
         proprio_values = terrain_cfg.get("proprioception").get("proprio_values")
     else:
         proprio_values = 0
-
 
     global_hf_x = terrain_cfg.get("local_height_field_x_length_in_meters")
     global_hf_y = terrain_cfg.get("local_height_field_y_length_in_meters")
@@ -95,30 +106,26 @@ def generate_setup(config_dict: dict) -> dict:
     distribution_size = 0
     proprio_distribution_size = 0
 
-
-    
-
-    if imports_cfg.get("state").split(".")[-1] == "MazeState" or imports_cfg.get("state").split(".")[-1] == "MazeStateObservationHistory" :
+    if (
+        imports_cfg.get("state").split(".")[-1] == "MazeState"
+        or imports_cfg.get("state").split(".")[-1] == "MazeStateObservationHistory"
+    ):
         global_hf_x = nr_mazes * maze_rows * space_cell
         global_hf_y = maze_cols * space_cell
         local_hf_x = maze_cols * space_cell
         local_hf_y = maze_rows * space_cell
         distribution_size = int(2 * (maze_cols + 1) * (maze_rows + 1))
-        proprio_distribution_size = int(maze_cols * maze_rows*proprio_values)
-
-
-
+        proprio_distribution_size = int(maze_cols * maze_rows * proprio_values)
 
     nr_curriculum_levels = curr_cfg.get("nr_curriculum_levels")
     max_curriculum_value = curr_cfg.get("max_curriculum_value")
     max_terrain_curr_coeff = curr_cfg.get("max_terrain_curriculum_value")
-    curr_coeff_delta =  max_curriculum_value/nr_curriculum_levels
-    
+    curr_coeff_delta = max_curriculum_value / nr_curriculum_levels
 
     # 4. Assemble Parameter Dictionaries Dynamically
     reward_parameters = dict(reward_cfg)
     ep_len = env_cfg.get("episode_length")
-    
+
     for key in ["exploration_part", "first_goal_part", "second_goal_part"]:
         mult_key = f"{key}_multiplier"
         if mult_key in reward_parameters:
@@ -131,29 +138,31 @@ def generate_setup(config_dict: dict) -> dict:
         "model_parameters": dr_cfg.get("model"),
         "observation_parameters": dr_cfg.get("observation"),
         "height_map_parameters": dr_cfg.get("height_map"),
-        "pertubation_parameters": dr_cfg.get("perturbation"),
-        "initial_pos_parameters": dr_cfg.get("initial_pos")
+        "perturbation_parameters": dr_cfg.get("perturbation"),
+        "initial_pos_parameters": dr_cfg.get("initial_pos"),
     }
 
     terrain_parameters = dict(terrain_cfg)
     proprio_parameters = terrain_parameters["proprioception"]
     proprio_parameters["terrain_roughness"] = terrain_parameters.get("terrain_roughness")
-    terrain_parameters.update({
-        "height_field_x_length_in_meters": global_hf_x,
-        "height_field_y_length_in_meters": global_hf_y,
-        "local_height_field_x_length_in_meters": local_hf_x,
-        "local_height_field_y_length_in_meters": local_hf_y,
-        "exploration_part": reward_parameters.get("exploration_part"),
-        "first_goal_part": reward_parameters.get("first_goal_part"),
-        "second_goal_part": reward_parameters.get("second_goal_part"),
-        "cell_visit_matrix_x_size": int(local_hf_x // terrain_cfg.get("cell_visit_size_in_meters",1)),
-        "cell_visit_matrix_y_size": int(local_hf_y // terrain_cfg.get("cell_visit_size_in_meters",1)),
-        "maze_file": train_cfg.get("file_mazes"),
-        "eval_maze_file": eval_cfg.get("file_eval_maze_nr"),
-        "nr_eval_mazes": eval_cfg.get("nr_eval_mazes"),
-        "nr_mazes": nr_mazes,
-        "proprioception": proprio_parameters,
-    })
+    terrain_parameters.update(
+        {
+            "height_field_x_length_in_meters": global_hf_x,
+            "height_field_y_length_in_meters": global_hf_y,
+            "local_height_field_x_length_in_meters": local_hf_x,
+            "local_height_field_y_length_in_meters": local_hf_y,
+            "exploration_part": reward_parameters.get("exploration_part"),
+            "first_goal_part": reward_parameters.get("first_goal_part"),
+            "second_goal_part": reward_parameters.get("second_goal_part"),
+            "cell_visit_matrix_x_size": int(local_hf_x // terrain_cfg.get("cell_visit_size_in_meters", 1)),
+            "cell_visit_matrix_y_size": int(local_hf_y // terrain_cfg.get("cell_visit_size_in_meters", 1)),
+            "maze_file": train_cfg.get("file_mazes"),
+            "eval_maze_file": eval_cfg.get("file_eval_maze_nr"),
+            "nr_eval_mazes": eval_cfg.get("nr_eval_mazes"),
+            "nr_mazes": nr_mazes,
+            "proprioception": proprio_parameters,
+        }
+    )
 
     actor_obs_size = env_cfg.get("actor_observation_size")
     val_obs_size = env_cfg.get("value_observation_size")
@@ -169,38 +178,36 @@ def generate_setup(config_dict: dict) -> dict:
         "height_field_in_meters_shape": [local_hf_x, local_hf_y],
         "height_field_resolution": terrain_cfg.get("height_field_resolution"),
         "distribution_size": distribution_size,
-        "proprioception_distribution_size":proprio_distribution_size,
-        "loc_distribution_size":train_cfg.get("loc_distribution_size"),
+        "proprioception_distribution_size": proprio_distribution_size,
+        "loc_distribution_size": train_cfg.get("loc_distribution_size"),
         "min_scale": arch_cfg.get("min_scale"),
         "max_scale": arch_cfg.get("max_scale"),
-        "matrix_memory_update_window_shape": mem_cfg.get("matrix_memory_update_window_shape",None),
-        "transformer_sequence_length": mem_cfg.get('transformer_sequence_length',None),
-        'transformer_n_heads': mem_cfg.get('transformer_n_heads',None),
-        'transformer_n_layers': mem_cfg.get('transformer_n_layers',None),
-        'transformer_memory_output_features': mem_cfg.get('transformer_memory_output_features',None),
-        'transformer_encoded_size': mem_cfg.get('transformer_encoded_size',None),
-
-        "matrix_memory_shape": mem_cfg.get("matrix_memory_shape",None),
-        "matrix_memory_feature_vector_size":mem_cfg.get("matrix_memory_feature_vector_size",None),
-        "gru_hidden_state_size": mem_cfg.get("gru_hidden_state_size",None),
-        "gru_feature_vector_size": mem_cfg.get("gru_feature_vector_size",None),
-        "cross_attention_n_channels": mem_cfg.get("cross_attention_n_channels",None),
-        "cross_attention_num_heads": mem_cfg.get("cross_attention_num_heads",None),
-        "cross_attention_qkv_features": mem_cfg.get("cross_attention_qkv_features",None),
-        "maximum_loc_delta_pred": mem_cfg.get("maximum_loc_delta_pred",None),
-        "height_map_gru_hidden_size": arch_cfg.get("height_map_gru_hidden_size",None),
+        "matrix_memory_update_window_shape": mem_cfg.get("matrix_memory_update_window_shape", None),
+        "transformer_sequence_length": mem_cfg.get("transformer_sequence_length", None),
+        "transformer_n_heads": mem_cfg.get("transformer_n_heads", None),
+        "transformer_n_layers": mem_cfg.get("transformer_n_layers", None),
+        "transformer_memory_output_features": mem_cfg.get("transformer_memory_output_features", None),
+        "transformer_encoded_size": mem_cfg.get("transformer_encoded_size", None),
+        "matrix_memory_shape": mem_cfg.get("matrix_memory_shape", None),
+        "matrix_memory_feature_vector_size": mem_cfg.get("matrix_memory_feature_vector_size", None),
+        "gru_hidden_state_size": mem_cfg.get("gru_hidden_state_size", None),
+        "gru_feature_vector_size": mem_cfg.get("gru_feature_vector_size", None),
+        "cross_attention_n_channels": mem_cfg.get("cross_attention_n_channels", None),
+        "cross_attention_num_heads": mem_cfg.get("cross_attention_num_heads", None),
+        "cross_attention_qkv_features": mem_cfg.get("cross_attention_qkv_features", None),
+        "maximum_loc_delta_pred": mem_cfg.get("maximum_loc_delta_pred", None),
+        "height_map_gru_hidden_size": arch_cfg.get("height_map_gru_hidden_size", None),
         "fixed_window_sequence_length": mem_cfg.get("fixed_window_sequence_length"),
         "fixed_window_memory_output_features": mem_cfg.get("fixed_window_memory_output_features"),
         "lstm_hidden_size": mem_cfg.get("lstm_hidden_size"),
         "lstm_memory_output_features": mem_cfg.get("lstm_memory_output_features"),
         "height_field_x_length_in_meters": global_hf_x,
         "height_field_y_length_in_meters": global_hf_y,
-        "cell_visit_matrix_x_size": int(local_hf_x // terrain_cfg.get("cell_visit_size_in_meters",1)),
-        "cell_visit_matrix_y_size": int(local_hf_y // terrain_cfg.get("cell_visit_size_in_meters",1)),
+        "cell_visit_matrix_x_size": int(local_hf_x // terrain_cfg.get("cell_visit_size_in_meters", 1)),
+        "cell_visit_matrix_y_size": int(local_hf_y // terrain_cfg.get("cell_visit_size_in_meters", 1)),
         "local_height_field_x_length_in_meters": local_hf_x,
         "local_height_field_y_length_in_meters": local_hf_y,
         "env_distribution_size": proprio_distribution_size,
-
     }
 
     observation_dict = {
@@ -209,10 +216,13 @@ def generate_setup(config_dict: dict) -> dict:
         "joint_vel_ids": jnp.arange(*dr_parameters["observation_parameters"]["joint_vel_ids"]),
         "last_action_ids": jnp.arange(*dr_parameters["observation_parameters"]["last_action_ids"]),
         "angular_velocity_ids": jnp.arange(*dr_parameters["observation_parameters"]["angular_velocity_ids"]),
-        "projected_gravity_vector_ids": jnp.arange(*dr_parameters["observation_parameters"]["projected_gravity_vector_ids"]),
-        "linear_velocity_ids": jnp.arange(*dr_parameters["observation_parameters"]["linear_velocity_ids"])if dr_parameters["observation_parameters"]["linear_velocity_ids"] else None,
+        "projected_gravity_vector_ids": jnp.arange(
+            *dr_parameters["observation_parameters"]["projected_gravity_vector_ids"]
+        ),
+        "linear_velocity_ids": jnp.arange(*dr_parameters["observation_parameters"]["linear_velocity_ids"])
+        if dr_parameters["observation_parameters"]["linear_velocity_ids"]
+        else None,
     }
-
 
     # 5. Initialize Core Modules
     robot = GO2(robot_cfg.get("config")) if GO2 else None
@@ -220,18 +230,40 @@ def generate_setup(config_dict: dict) -> dict:
     physics_steps = env_cfg.get("physics_steps_per_control_step")
     dt = robot.model.opt.timestep * physics_steps if robot else None
     reward_handler = MazeReward(reward_parameters, robot, dt) if MazeReward and robot else None
-    terrain_observation = TerrainObs(terrain_parameters, dr_parameters["height_map_parameters"], dict(lidar_cfg), robot) if TerrainObs else None
+    terrain_observation = (
+        TerrainObs(terrain_parameters, dr_parameters["height_map_parameters"], dict(lidar_cfg), robot)
+        if TerrainObs
+        else None
+    )
     observation_dr_module = ObsDR(observation_dict) if ObsDR else None
-    init_state_dr = InitStateRandomization(dr_parameters["initial_pos_parameters"], robot=robot) if InitStateRandomization else None
+    init_state_dr = (
+        InitStateRandomization(dr_parameters["initial_pos_parameters"], robot=robot)
+        if InitStateRandomization
+        else None
+    )
     model_dr = ModelDR(robot.model, robot, dr_parameters["model_parameters"]) if ModelDR and robot else None
-    domain_pertubation = DefaultDomainPerturbation(dr_parameters["pertubation_parameters"]) if DefaultDomainPerturbation else None
-    control_randomization_module = DefaultDomainControl(robot.model, dr_parameters["control_parameters"]) if DefaultDomainControl and robot else None
-    terrain_generator = MazeStaticGenerator(terrain_parameters, terrain_cfg.get("use_file_maze")) if MazeStaticGenerator else None
+    domain_perturbation = (
+        DefaultDomainPerturbation(dr_parameters["perturbation_parameters"])
+        if DefaultDomainPerturbation
+        else None
+    )
+    control_randomization_module = (
+        DefaultDomainControl(robot.model, dr_parameters["control_parameters"])
+        if DefaultDomainControl and robot
+        else None
+    )
+    terrain_generator = (
+        MazeStaticGenerator(terrain_parameters, terrain_cfg.get("use_file_maze"))
+        if MazeStaticGenerator
+        else None
+    )
     command_creator = StaticMazeCommandCreator(terrain_parameters) if StaticMazeCommandCreator else None
-    action_delay_module = DelayAction(dr_parameters["action_delay_parameters"],robot) if DelayAction else None
+    action_delay_module = (
+        DelayAction(dr_parameters["action_delay_parameters"], robot) if DelayAction else None
+    )
     pd_control_module = PDControl(robot) if PDControl and robot else None
 
-    #7. Load training state and optimzer
+    # 7. Load training state and optimzer
     optimizer, training_state = actor_critic.create_optimizer_and_training_state(train_cfg)
 
     # 6. Load MuJoCo Models and State Data
@@ -241,18 +273,19 @@ def generate_setup(config_dict: dict) -> dict:
         initial_mjx_data = mjx.make_data(initial_mjx_model)
 
         max_delay_steps = action_delay_module.max_nr_delay_steps if action_delay_module else None
-        hm_max_delay = dr_cfg.get("height_map").get("height_map_max_delay") if dr_cfg.get("height_map") else None
+        hm_max_delay = (
+            dr_cfg.get("height_map").get("height_map_max_delay") if dr_cfg.get("height_map") else None
+        )
 
         if imports_cfg.get("state").split(".")[-1] == "MazeStateObservationHistory":
             sequence_length = None
-            if mem_cfg.get('transformer_sequence_length') is not None:
-                sequence_length = mem_cfg.get('transformer_sequence_length')
+            if mem_cfg.get("transformer_sequence_length") is not None:
+                sequence_length = mem_cfg.get("transformer_sequence_length")
             else:
-                sequence_length = mem_cfg.get('fixed_window_sequence_length')
-                 
+                sequence_length = mem_cfg.get("fixed_window_sequence_length")
 
             state = MazeState(
-                model=initial_mjx_model, 
+                model=initial_mjx_model,
                 pipeline_state=initial_mjx_data,
                 last_action=jnp.zeros(int(actor_out_size / 2), dtype=jnp.float32),
                 prev_joint_vel=jnp.zeros_like(initial_mjx_data.qvel[robot.joint_qvel_adr]),
@@ -289,7 +322,13 @@ def generate_setup(config_dict: dict) -> dict:
                 wall_position=jnp.zeros(2, dtype=jnp.float32),
                 lidar_horizontal_pos=jnp.zeros((), dtype=jnp.float32),
                 time_to_reach_goal=jnp.zeros((), dtype=jnp.float32),
-                cell_visits=jnp.zeros((terrain_parameters["cell_visit_matrix_x_size"], terrain_parameters["cell_visit_matrix_y_size"]), dtype=jnp.float32),
+                cell_visits=jnp.zeros(
+                    (
+                        terrain_parameters["cell_visit_matrix_x_size"],
+                        terrain_parameters["cell_visit_matrix_y_size"],
+                    ),
+                    dtype=jnp.float32,
+                ),
                 first_goal_reward_given=jnp.array(False, dtype=jnp.bool_),
                 second_goal_reward_given=jnp.array(False, dtype=jnp.bool_),
                 reached_goals=jnp.array([False, False], dtype=jnp.bool_),
@@ -301,19 +340,26 @@ def generate_setup(config_dict: dict) -> dict:
                 maze_description=jnp.zeros((distribution_size,), dtype=jnp.float32),
                 exploration_phase_length=jnp.zeros((), dtype=jnp.int32),
                 sampled_terrain_curr_coeff=jnp.zeros((), dtype=jnp.float32),
-                proprio_cell_values = jnp.zeros((maze_rows,maze_cols,proprio_values),dtype=jnp.float32),
-                max_loc_error = jnp.zeros((), dtype=jnp.float32),
-                avg_loc_error = jnp.zeros((), dtype=jnp.float32),
-                use_pred_loc = jnp.array(False, dtype=jnp.bool_),
-                noisy_true_pos = jnp.zeros((3,),dtype=jnp.float32),
-                observation_history = jnp.zeros((sequence_length,6+env_cfg.get('actor_observation_size')+terrain_cfg.get('encoded_height_map_size'),)),
-                exponential_curr_coeff = jnp.ones((),dtype=jnp.float32),
-                exponential_terrain_curr_coeff = jnp.ones((),dtype=jnp.float32),
+                proprio_cell_values=jnp.zeros((maze_rows, maze_cols, proprio_values), dtype=jnp.float32),
+                max_loc_error=jnp.zeros((), dtype=jnp.float32),
+                avg_loc_error=jnp.zeros((), dtype=jnp.float32),
+                use_pred_loc=jnp.array(False, dtype=jnp.bool_),
+                noisy_true_pos=jnp.zeros((3,), dtype=jnp.float32),
+                observation_history=jnp.zeros(
+                    (
+                        sequence_length,
+                        6
+                        + env_cfg.get("actor_observation_size")
+                        + terrain_cfg.get("encoded_height_map_size"),
+                    )
+                ),
+                exponential_curr_coeff=jnp.ones((), dtype=jnp.float32),
+                exponential_terrain_curr_coeff=jnp.ones((), dtype=jnp.float32),
             )
 
         else:
             state = MazeState(
-                model=initial_mjx_model, 
+                model=initial_mjx_model,
                 pipeline_state=initial_mjx_data,
                 last_action=jnp.zeros(int(actor_out_size / 2), dtype=jnp.float32),
                 prev_joint_vel=jnp.zeros_like(initial_mjx_data.qvel[robot.joint_qvel_adr]),
@@ -350,7 +396,13 @@ def generate_setup(config_dict: dict) -> dict:
                 wall_position=jnp.zeros(2, dtype=jnp.float32),
                 lidar_horizontal_pos=jnp.zeros((), dtype=jnp.float32),
                 time_to_reach_goal=jnp.zeros((), dtype=jnp.float32),
-                cell_visits=jnp.zeros((terrain_parameters["cell_visit_matrix_x_size"], terrain_parameters["cell_visit_matrix_y_size"]), dtype=jnp.float32),
+                cell_visits=jnp.zeros(
+                    (
+                        terrain_parameters["cell_visit_matrix_x_size"],
+                        terrain_parameters["cell_visit_matrix_y_size"],
+                    ),
+                    dtype=jnp.float32,
+                ),
                 first_goal_reward_given=jnp.array(False, dtype=jnp.bool_),
                 second_goal_reward_given=jnp.array(False, dtype=jnp.bool_),
                 reached_goals=jnp.array([False, False], dtype=jnp.bool_),
@@ -362,24 +414,28 @@ def generate_setup(config_dict: dict) -> dict:
                 maze_description=jnp.zeros((distribution_size,), dtype=jnp.float32),
                 exploration_phase_length=jnp.zeros((), dtype=jnp.int32),
                 sampled_terrain_curr_coeff=jnp.zeros((), dtype=jnp.float32),
-                proprio_cell_values = jnp.zeros((maze_rows,maze_cols,proprio_values),dtype=jnp.float32),
-                noisy_true_pos = jnp.zeros((3,),dtype=jnp.float32),
-                max_loc_error = jnp.zeros((), dtype=jnp.float32),
-                avg_loc_error = jnp.zeros((), dtype=jnp.float32),
-                use_pred_loc = jnp.array(False, dtype=jnp.bool_),
-                exponential_curr_coeff = jnp.ones((),dtype=jnp.float32),
-                exponential_terrain_curr_coeff = jnp.ones((),dtype=jnp.float32),
+                proprio_cell_values=jnp.zeros((maze_rows, maze_cols, proprio_values), dtype=jnp.float32),
+                noisy_true_pos=jnp.zeros((3,), dtype=jnp.float32),
+                max_loc_error=jnp.zeros((), dtype=jnp.float32),
+                avg_loc_error=jnp.zeros((), dtype=jnp.float32),
+                use_pred_loc=jnp.array(False, dtype=jnp.bool_),
+                exponential_curr_coeff=jnp.ones((), dtype=jnp.float32),
+                exponential_terrain_curr_coeff=jnp.ones((), dtype=jnp.float32),
             )
     else:
         state = None
 
-    visualizer_dict,eval_dict = actor_critic.create_dictionaries(eval_cfg)
+    visualizer_dict, eval_dict = actor_critic.create_dictionaries(eval_cfg)
     visualizer_dict["state"] = state
     eval_dict["state"] = state
-    
-    
+
     debug_mode = train_cfg.get("debug")
-    eval_curriculum_steps = list(eval_cfg.get("evaluation_at_curriculum_steps_debug" if debug_mode else "evaluation_at_curriculum_steps_prod", []))
+    eval_curriculum_steps = list(
+        eval_cfg.get(
+            "evaluation_at_curriculum_steps_debug" if debug_mode else "evaluation_at_curriculum_steps_prod",
+            [],
+        )
+    )
 
     CONFIG = {
         "env": {
@@ -418,7 +474,7 @@ def generate_setup(config_dict: dict) -> dict:
                 "ObsDR": observation_dr_module,
                 "InitStateRandomization": init_state_dr,
                 "ModelDR": model_dr,
-                "DefaultDomainPerturbation": domain_pertubation,
+                "DefaultDomainPerturbation": domain_perturbation,
                 "DefaultDomainControl": control_randomization_module,
                 "TerrainGenerator": terrain_generator,
                 "CommandCreator": command_creator,
@@ -431,13 +487,13 @@ def generate_setup(config_dict: dict) -> dict:
             "actor_critic": actor_critic,
             "observation_dict": observation_dict,
             "actor_critic_dict": actor_critic_dict,
-            "gru_hidden_state_size": mem_cfg.get("gru_hidden_state_size",None),
-            "gru_feature_vector_size": mem_cfg.get("gru_feature_vector_size",None),
-            "training_steps": train_cfg.get("training_steps"), 
+            "gru_hidden_state_size": mem_cfg.get("gru_hidden_state_size", None),
+            "gru_feature_vector_size": mem_cfg.get("gru_feature_vector_size", None),
+            "training_steps": train_cfg.get("training_steps"),
             "minibatch_size": train_cfg.get("minibatch_size"),
             "num_updates_per_batch": train_cfg.get("num_updates_per_batch"),
             "discount_factor": train_cfg.get("discount_factor"),
-            "learning_rate": train_cfg.get("learning_rate"), 
+            "learning_rate": train_cfg.get("learning_rate"),
             "min_entropy_cost": train_cfg.get("min_entropy_cost"),
             "max_entropy_cost": train_cfg.get("max_entropy_cost"),
             "nr_envs": train_cfg.get("nr_envs"),
@@ -459,7 +515,7 @@ def generate_setup(config_dict: dict) -> dict:
             "bce_loss_scaling_factor": train_cfg.get("bce_loss_scaling_factor"),
             "delta_pos_loss_scaling_factor": train_cfg.get("delta_pos_loss_scaling_factor"),
             "proprio_loss_scaling_factor": train_cfg.get("proprio_loss_scaling_factor"),
-            "loc_dist_scaling_factor":train_cfg.get("loc_dist_scaling_factor"),
+            "loc_dist_scaling_factor": train_cfg.get("loc_dist_scaling_factor"),
             "env_head_loss_factor": train_cfg.get("env_head_loss_factor"),
             "heights_encoding_loss_scaling_factor": train_cfg.get("heights_encoding_loss_scaling_factor"),
             "linear_velocity_loss_scaling_factor": train_cfg.get("linear_velocity_loss_scaling_factor"),
@@ -470,7 +526,7 @@ def generate_setup(config_dict: dict) -> dict:
             "nr_eval_envs": eval_cfg.get("nr_eval_envs"),
             "eval_dict": eval_dict,
             "deterministic_eval_callback": deterministic_eval_callback,
-            "experiment_callback":experiment_callback,
+            "experiment_callback": experiment_callback,
             "evaluation_at_curriculum_steps": eval_curriculum_steps,
             "drift_damping": train_cfg.get("drift_damping"),
             "drift_noise": train_cfg.get("drift_noise"),
@@ -478,19 +534,15 @@ def generate_setup(config_dict: dict) -> dict:
             "true_pos_noise": train_cfg.get("true_pos_noise"),
             "dropout_true_pos_noise": train_cfg.get("dropout_true_pos_noise"),
             "dropout_pos_noise_chance": train_cfg.get("dropout_pos_noise_chance"),
-            "noisy_true_pos":train_cfg.get("noisy_true_pos"),
-
+            "noisy_true_pos": train_cfg.get("noisy_true_pos"),
         },
         "visualizer": {
             # Viewer settings are not part of the training configs; pass them on the
             # command line, e.g. +visualizer.policy_name=non_sweep/local_<id>/<step>
             "policy": vis_cfg.get("policy_name", "None"),
             "partial_trained_policy": vis_cfg.get("partial_trained_policy", False),
-            "video": vis_cfg.get("video", False),
             "curriculum_level": vis_cfg.get("curriculum_level", 1.0),
             "terrain_curriculum_level": vis_cfg.get("terrain_curriculum_level", 1.0),
-            "used_height_encoder": vis_cfg.get("used_height_encoder", False),
-            "used_gru": vis_cfg.get("used_gru", False),
             "params_type": Params,
             "use_observation_history": False,
             "visualizer_callback_function": visualizer_callback,
@@ -498,12 +550,11 @@ def generate_setup(config_dict: dict) -> dict:
             "labels": actor_critic.labels,
             "visualizer_dict": visualizer_dict,
             "training_state": training_state,
-            "maze": vis_cfg.get("maze",None),
-            "key": vis_cfg.get("key",None),
-            "deployment_name":vis_cfg.get("deployment_name",None),
-            "run_name": config_dict.get("run_name")
-
-        }
+            "maze": vis_cfg.get("maze", None),
+            "key": vis_cfg.get("key", None),
+            "deployment_name": vis_cfg.get("deployment_name", None),
+            "run_name": config_dict.get("run_name"),
+        },
     }
 
     return CONFIG

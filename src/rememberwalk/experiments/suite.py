@@ -5,6 +5,7 @@ Every run is rebuilt from the ``config.yaml`` that ``scripts/train.py`` writes n
 checkpoints, so a policy is always evaluated with the configuration it was trained with.
 Only the suite's ``overrides`` (rendering model, shared eval mazes, ...) are applied on top.
 """
+
 import copy
 import json
 import re
@@ -13,7 +14,7 @@ from pathlib import Path
 
 from omegaconf import OmegaConf
 
-from rememberwalk.utils.paths import CKPT_DIR, CONFIG_DIR, ROOT_DIR, MAZE_DIR
+from rememberwalk.utils.paths import CKPT_DIR, CONFIG_DIR, MAZE_DIR, ROOT_DIR
 
 # Suffix of the persistent copy PPOTrainer writes when the curriculum is complete
 SECURED_CKPT_SUFFIX = "_curr_complete"
@@ -21,30 +22,37 @@ SECURED_CKPT_SUFFIX = "_curr_complete"
 
 @dataclass
 class Approach:
+    """One approach of a suite and its trained runs (one per seed)."""
+
     name: str
-    color: tuple            # 0-255 RGB, used by every figure and the video
-    runs: list              # checkpoint paths relative to CKPT_DIR, one per seed
-    config: str = None      # training config name, only for runs without a saved config.yaml
-    showcase_run: int = 0   # run used for the prediction figure and the live video
-    imported: bool = False  # eval data (and live recording) copied in from elsewhere; runs are labels, not checkpoints
+    color: tuple  # 0-255 RGB, used by every figure and the video
+    runs: list  # checkpoint paths relative to CKPT_DIR, one per seed
+    config: str = None  # training config name, only for runs without a saved config.yaml
+    showcase_run: int = 0  # run used for the prediction figure and the live video
+    # eval data (and live recording) copied in from elsewhere; runs are labels, not checkpoints
+    imported: bool = False
 
     @property
     def slug(self) -> str:
+        """File-system friendly name (lowercase, underscores)."""
         return re.sub(r"[^a-z0-9]+", "_", self.name.lower()).strip("_")
 
     @property
     def color_unit(self) -> tuple:
+        """Colour as 0-1 RGB."""
         return tuple(c / 255.0 for c in self.color)
 
 
 @dataclass
 class Figure:
-    kind: str               # bce | exploration | heat_maps | predictions
-    file: str               # relative to the suite output_dir
-    approaches: list        # Approach objects, in display order
-    labels: list = None     # optional short display names, one per approach (default: approach names)
-    colors: list = None     # bce only: optional RGB (0-1) per approach, overriding the approach colors
-    linestyles: list = None # bce only: optional named dash pattern per approach (plots.style.LINESTYLES)
+    """One figure of a suite: its kind, output file and the approaches it shows."""
+
+    kind: str  # bce | exploration | heat_maps | predictions
+    file: str  # relative to the suite output_dir
+    approaches: list  # Approach objects, in display order
+    labels: list = None  # optional short display names, one per approach (default: approach names)
+    colors: list = None  # bce only: optional RGB (0-1) per approach, overriding the approach colors
+    linestyles: list = None  # bce only: optional named dash pattern per approach (plots.style.LINESTYLES)
 
 
 # Figures made when a suite file has no 'figures' section
@@ -58,6 +66,8 @@ DEFAULT_FIGURES = {
 
 @dataclass
 class Suite:
+    """A parsed experiment suite (configs/experiments/*.yaml)."""
+
     name: str
     output_dir: Path
     overrides: dict
@@ -66,20 +76,25 @@ class Suite:
     nr_envs: int
     randomization_key: int
     approaches: list
-    figures: list           # Figure objects
+    figures: list  # Figure objects
     showcase_env_index: int
     showcase_timesteps: list
     video: dict = field(default_factory=dict)
     video_approaches: list = field(default_factory=list)
 
     def data_dir(self, approach: Approach, run_index: int) -> Path:
+        """Directory of the eval data of run ``run_index`` of an approach."""
         return self.output_dir / "data" / approach.slug / f"run_{run_index + 1}"
 
     def output_path(self, relative: str) -> Path:
+        """Path relative to the suite's output directory."""
         return self.output_dir / relative
 
 
 def load_suite(path) -> Suite:
+    """Parses and validates a suite file. Approaches without runs and figures without approaches are
+    skipped.
+    """
     path = Path(path)
     raw = OmegaConf.to_container(OmegaConf.load(path), resolve=True)
     output_dir = Path(raw.get("output_dir", f"outputs/experiments/{path.stem}"))
@@ -100,7 +115,10 @@ def load_suite(path) -> Suite:
             print(f"** Skipping approach '{approach.name}': no runs listed in {path}")
             continue
         if not 0 <= approach.showcase_run < len(approach.runs):
-            raise ValueError(f"showcase_run {approach.showcase_run} of '{approach.name}' is not one of its {len(approach.runs)} runs")
+            raise ValueError(
+                f"showcase_run {approach.showcase_run} of '{approach.name}' is not one of its "
+                f"{len(approach.runs)} runs"
+            )
         approaches.append(approach)
     if not approaches:
         raise ValueError(f"No approach in {path} lists any runs")
@@ -121,12 +139,15 @@ def load_suite(path) -> Suite:
     for name, entry in (raw.get("figures") or DEFAULT_FIGURES).items():
         if isinstance(entry, str):
             entry = {"file": entry}
-        figure = Figure(kind=entry.get("kind", name), file=entry["file"],
-                        approaches=select(entry.get("approaches"), f"Figure '{name}'"))
+        figure = Figure(
+            kind=entry.get("kind", name),
+            file=entry["file"],
+            approaches=select(entry.get("approaches"), f"Figure '{name}'"),
+        )
         if entry.get("labels") is not None:
             if entry.get("approaches") is None or len(entry["labels"]) != len(entry["approaches"]):
                 raise ValueError(f"Figure '{name}' in {path}: give one label per listed approach")
-            label_of = dict(zip(entry["approaches"], entry["labels"]))
+            label_of = dict(zip(entry["approaches"], entry["labels"], strict=True))
             figure.labels = [label_of[a.name] for a in figure.approaches]
         for option in ("colors", "linestyles"):
             if entry.get(option) is None:
@@ -134,16 +155,21 @@ def load_suite(path) -> Suite:
             if figure.kind != "bce":
                 raise ValueError(f"Figure '{name}' in {path}: '{option}' is only supported for bce figures")
             if entry.get("approaches") is None or len(entry[option]) != len(entry["approaches"]):
-                raise ValueError(f"Figure '{name}' in {path}: give one entry of '{option}' per listed approach")
-            value_of = dict(zip(entry["approaches"], entry[option]))
+                raise ValueError(
+                    f"Figure '{name}' in {path}: give one entry of '{option}' per listed approach"
+                )
+            value_of = dict(zip(entry["approaches"], entry[option], strict=True))
             values = [value_of[a.name] for a in figure.approaches]
             if option == "colors":
                 values = [tuple(c / 255.0 for c in color) for color in values]
             else:
                 from rememberwalk.experiments.plots.style import LINESTYLES
+
                 unknown = sorted(set(values) - set(LINESTYLES))
                 if unknown:
-                    raise ValueError(f"Figure '{name}' in {path}: unknown linestyles {unknown}, use {list(LINESTYLES)}")
+                    raise ValueError(
+                        f"Figure '{name}' in {path}: unknown linestyles {unknown}, use {list(LINESTYLES)}"
+                    )
             setattr(figure, option, values)
         if not figure.approaches:
             print(f"** Skipping figure '{name}': none of its approaches has runs")
@@ -175,7 +201,7 @@ def _saved_config_path(run_path: str):
     run_dir = (CKPT_DIR / run_path).parent
     candidates = [run_dir / "config.yaml"]
     if run_dir.name.endswith(SECURED_CKPT_SUFFIX):
-        candidates.append(run_dir.with_name(run_dir.name[:-len(SECURED_CKPT_SUFFIX)]) / "config.yaml")
+        candidates.append(run_dir.with_name(run_dir.name[: -len(SECURED_CKPT_SUFFIX)]) / "config.yaml")
     for candidate in candidates:
         if candidate.is_file():
             return candidate
@@ -207,7 +233,8 @@ def training_config(approach: Approach, run_path: str) -> dict:
     else:
         raise FileNotFoundError(
             f"{run_path} has no config.yaml next to it. Add 'config: <training config name>' "
-            f"to the approach '{approach.name}' in the suite file.")
+            f"to the approach '{approach.name}' in the suite file."
+        )
     return _upgrade_legacy_keys(OmegaConf.to_container(OmegaConf.load(source), resolve=True))
 
 
@@ -228,7 +255,9 @@ def experiment_config(suite: Suite, approach: Approach, run_path: str, nr_envs: 
 
     eval_maze_file = MAZE_DIR / f"maze_{config['eval']['file_eval_maze_nr']}.pkl"
     if not eval_maze_file.is_file():
-        raise FileNotFoundError(f"Eval maze file {eval_maze_file} is missing; generate it before running the experiments")
+        raise FileNotFoundError(
+            f"Eval maze file {eval_maze_file} is missing; generate it before running the experiments"
+        )
     return config
 
 

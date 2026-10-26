@@ -9,34 +9,37 @@ Data comes from the eval_data.pkl of each approach's showcase run; nothing is
 re-simulated. The rendering model must contain the maze_tex texture
 (go2_mjx_navigation_plot.xml, set in the suite overrides) -- MazePainter refuses otherwise.
 """
-import numpy as np
+
 import jax
 import jax.numpy as jnp
+import matplotlib.pyplot as _plt
 import mujoco
+import numpy as np
 
-from rememberwalk.experiments.suite import experiment_config
 from rememberwalk.experiments.plots.maze_render import (
-    load_prediction_data, infer_grid, sigmoid,
-    plot_render_grid, select_environment,
+    infer_grid,
+    load_prediction_data,
+    plot_render_grid,
+    select_environment,
+    sigmoid,
 )
+from rememberwalk.experiments.suite import experiment_config
 from rememberwalk.terrain.MazeEvaluationTerrainGenerator import MazeEvaluationTerrainGenerator
 from rememberwalk.utils.generate_setup import generate_setup
 from rememberwalk.utils.maze_visual_runtime import MazePainter
 
-TRUE_RGB = (40, 40, 40)          # near-black walls for the true maze
-FLOOR_RGB = (180, 180, 180)     # brighter floor; walls and dark line pop against it
+TRUE_RGB = (40, 40, 40)  # near-black walls for the true maze
+FLOOR_RGB = (180, 180, 180)  # brighter floor; walls and dark line pop against it
 
-RENDER_PX = 1280                 # square; camera 0 is the fixed top-down ortho.
-                                 # Must fit the offscreen buffer set by
-                                 # <visual><global offwidth offheight> in the
-                                 # XML; make_renderer() falls back if not.
-WALL_THRESHOLD = 0.4             # p > threshold -> wall, else no wall
-CONTROL_FREQ_HZ = 50             # sim steps per second, for the time axis
-WORLD_EXTENT = 5.0               # hfield half-size: world spans [-5, 5] m
+RENDER_PX = 1280  # square; camera 0 is the fixed top-down ortho.
+# Must fit the offscreen buffer set by
+# <visual><global offwidth offheight> in the
+# XML; make_renderer() falls back if not.
+WALL_THRESHOLD = 0.4  # p > threshold -> wall, else no wall
+CONTROL_FREQ_HZ = 50  # sim steps per second, for the time axis
+WORLD_EXTENT = 5.0  # hfield half-size: world spans [-5, 5] m
 # Trajectory gradient: plain dark -> light. Truncated short of pure white so
 # the newest segment stays visible on the (now brighter) floor.
-import matplotlib.pyplot as _plt
-
 TRAJ_CMAP = _plt.get_cmap("copper")
 
 
@@ -52,8 +55,7 @@ def world_to_px(x, y, H, W, extent=WORLD_EXTENT):
     return int(round(col)), int(round(row))
 
 
-def draw_trajectory(img, path_xy, upto, total_steps, extent=WORLD_EXTENT,
-                    stride=4, thickness=None):
+def draw_trajectory(img, path_xy, upto, total_steps, extent=WORLD_EXTENT, stride=4, thickness=None):
     """Overlay the path travelled so far, colour-graded by GLOBAL time.
 
     The gradient is normalised by total_steps, not by the drawn length, so a
@@ -61,10 +63,11 @@ def draw_trajectory(img, path_xy, upto, total_steps, extent=WORLD_EXTENT,
     panel's line simply stops partway through the colormap.
     """
     import cv2
+
     cmap = TRAJ_CMAP
     H, W = img.shape[:2]
     if thickness is None:
-        thickness = max(3, round(3 * W / 640))   # keep line weight at high res
+        thickness = max(3, round(3 * W / 640))  # keep line weight at high res
     upto = int(min(upto, len(path_xy) - 1))
     idx = np.arange(0, upto + 1, stride)
     if idx.size == 0 or idx[-1] != upto:
@@ -74,9 +77,14 @@ def draw_trajectory(img, path_xy, upto, total_steps, extent=WORLD_EXTENT,
     for a in range(len(pts) - 1):
         frac = idx[a + 1] / max(total_steps - 1, 1)
         r, g, b, _ = cmap(float(frac))
-        cv2.line(img, pts[a], pts[a + 1],
-                 (int(255 * r), int(255 * g), int(255 * b)),
-                 thickness, lineType=cv2.LINE_AA)
+        cv2.line(
+            img,
+            pts[a],
+            pts[a + 1],
+            (int(255 * r), int(255 * g), int(255 * b)),
+            thickness,
+            lineType=cv2.LINE_AA,
+        )
     return img
 
 
@@ -105,17 +113,20 @@ def make_renderer(model, px=RENDER_PX):
         try:
             rend = mujoco.Renderer(model, size, size)
             if size != px:
-                print(f"** offscreen buffer too small for {px}px, using "
-                      f"{size}px. Raise offwidth/offheight in the XML for "
-                      f"full print resolution.")
+                print(
+                    f"** offscreen buffer too small for {px}px, using "
+                    f"{size}px. Raise offwidth/offheight in the XML for "
+                    f"full print resolution."
+                )
             return rend
         except Exception as e:
             last = e
     raise last
 
 
-def render_panel(model, renderer, painter, hfield_flat, wall_rgb,
-                 pose=None, keyframe="home", color_values=None):
+def render_panel(
+    model, renderer, painter, hfield_flat, wall_rgb, pose=None, keyframe="home", color_values=None
+):
     """One MuJoCo render: given heightfield and wall colour; robot posed at
     (x, y, yaw) if pose is given, hidden below the floor otherwise.
 
@@ -129,8 +140,7 @@ def render_panel(model, renderer, painter, hfield_flat, wall_rgb,
 
     painter.floor_rgb = tuple(FLOOR_RGB)
     if color_values is not None:
-        painter.paint_values(model, color_values, wall_rgb=tuple(wall_rgb),
-                             renderer=renderer)
+        painter.paint_values(model, color_values, wall_rgb=tuple(wall_rgb), renderer=renderer)
     else:
         painter.wall_rgb = tuple(wall_rgb)
         painter.paint(model, renderer=renderer, force=True)
@@ -143,7 +153,7 @@ def render_panel(model, renderer, painter, hfield_flat, wall_rgb,
         data.qpos[0:2] = (x, y)
         data.qpos[3:7] = yaw_to_quat(yaw)
     else:
-        data.qpos[2] = -50.0          # park the robot far below the floor
+        data.qpos[2] = -50.0  # park the robot far below the floor
     mujoco.mj_forward(model, data)
 
     mujoco.mj_camlight(model, data)
@@ -152,6 +162,11 @@ def render_panel(model, renderer, painter, hfield_flat, wall_rgb,
 
 
 def make_prediction_figure(suite, out_path, seed=0, approaches=None):
+    """Renders the showcase maze with each approach's predicted walls and trajectory at
+    ``suite.showcase_timesteps``.
+
+    Uses the showcase run of every approach in ``approaches`` (default: all) and writes ``out_path``.
+    """
     approaches = approaches or suite.approaches
     names = [a.name for a in approaches]
 
@@ -163,10 +178,12 @@ def make_prediction_figure(suite, out_path, seed=0, approaches=None):
     print(f"maze grid {R}x{C}, timesteps {steps}, env {env_index}")
 
     def true_at(t):
+        """True wall map of the showcase env at step t."""
         tr = data[names[0]]["true"]
         return np.asarray((tr[t] if tr.ndim == 3 else tr)[env_index], float)
 
     def pred_probs(name, t):
+        """Predicted wall probabilities of an approach at step t (sigmoid applied to logits)."""
         p = np.asarray(data[name]["predicted"][t, env_index], float)
         if p.min() < 0 or p.max() > 1:
             p = sigmoid(p)
@@ -183,34 +200,45 @@ def make_prediction_figure(suite, out_path, seed=0, approaches=None):
     setup = generate_setup(config)
     env_setup = setup["env"]
     generator = MazeEvaluationTerrainGenerator(
-        env_setup["terrain_parameters"],
-        jnp.asarray(true_at(steps[0]).reshape(R + 1, C + 1, 2)))
+        env_setup["terrain_parameters"], jnp.asarray(true_at(steps[0]).reshape(R + 1, C + 1, 2))
+    )
     env_setup["imports"]["TerrainGenerator"] = generator
     env_setup["initial_curr_coeff"] = suite.curriculum_level
     env_setup["initial_terrain_curr_coeff"] = suite.terrain_curriculum_level
 
     env = env_setup["mode"](env_setup)
     key = jax.random.PRNGKey(0)
-    env.reset(suite.curriculum_level, suite.terrain_curriculum_level, key)   # populate model buffers
+    env.reset(suite.curriculum_level, suite.terrain_curriculum_level, key)  # populate model buffers
 
     renderer = make_renderer(env.model, RENDER_PX)
-    painter = MazePainter(env.model)                 # flip_rows default
+    painter = MazePainter(env.model)  # flip_rows default
 
     # ---- render all panels ------------------------------------------------
     images = []
     for t in steps:
         # True panel: maze only. The robot and its trajectory live in the
         # prediction panels, because each approach followed its own path.
-        row = [render_panel(env.model, renderer, painter,
-                            description_to_hfield(generator, true_at(t), R, C),
-                            TRUE_RGB, pose=None)]
+        row = [
+            render_panel(
+                env.model,
+                renderer,
+                painter,
+                description_to_hfield(generator, true_at(t), R, C),
+                TRUE_RGB,
+                pose=None,
+            )
+        ]
         for approach in approaches:
             name = approach.name
             pose = np.asarray(data[name]["pos"][t, env_index])
-            img = render_panel(env.model, renderer, painter,
-                               description_to_hfield(
-                                   generator, pred_binary(name, t), R, C),
-                               approach.color, pose=pose)
+            img = render_panel(
+                env.model,
+                renderer,
+                painter,
+                description_to_hfield(generator, pred_binary(name, t), R, C),
+                approach.color,
+                pose=pose,
+            )
             path = np.asarray(data[name]["pos"][:, env_index, :2])
             img = draw_trajectory(img, path, upto=t, total_steps=T)
             row.append(img)
@@ -218,6 +246,13 @@ def make_prediction_figure(suite, out_path, seed=0, approaches=None):
         print(f"rendered row t={t}")
     renderer.close()
 
-    plot_render_grid(images, names, steps, str(out_path),
-                     control_freq_hz=CONTROL_FREQ_HZ, traj_cmap=TRAJ_CMAP,time_on_x=True)
+    plot_render_grid(
+        images,
+        names,
+        steps,
+        str(out_path),
+        control_freq_hz=CONTROL_FREQ_HZ,
+        traj_cmap=TRAJ_CMAP,
+        time_on_x=True,
+    )
     print(f"wrote {out_path}")

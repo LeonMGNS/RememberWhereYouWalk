@@ -10,6 +10,7 @@ maze files, checkpoints, logs and videos -- lives under ROOT_DIR:
 Each location can be overridden with an environment variable:
 REMEMBERWALK_ROOT, REMEMBERWALK_DATA_DIR, REMEMBERWALK_CKPT_DIR.
 """
+
 import os
 from importlib.resources import files
 from pathlib import Path

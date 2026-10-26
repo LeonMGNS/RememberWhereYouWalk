@@ -1,19 +1,14 @@
+from pathlib import Path
+
+import hydra
+import wandb
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import DictConfig, OmegaConf
 
 from rememberwalk.utils.checkpointing import get_dir_and_run_for_checkpointing
-from rememberwalk.utils.wandb_logging import filter_nested, EmptyLogger
 from rememberwalk.utils.generate_setup import generate_setup
 from rememberwalk.utils.paths import CKPT_DIR
-from pathlib import Path
-import optax
-import time
-import wandb
-import sys
-import importlib
-from omegaconf import DictConfig, OmegaConf
-import hydra
-from hydra.core.hydra_config import HydraConfig
-
-
+from rememberwalk.utils.wandb_logging import EmptyLogger
 
 
 def save_run_config(ckpt_dir: str, config: dict):
@@ -29,10 +24,12 @@ def print_final_checkpoint(ckpt_dir: str, training_state):
 @hydra.main(version_base="1.3", config_path="../configs", config_name=None)
 def main(cfg: DictConfig):
     if not cfg:
-        raise ValueError("No config file specified.\n"
-                        "You must define a configuration file to run this script.\n"
-                        "Example usage: python3 scripts/train.py --config-name=lsmm\n")
-    
+        raise ValueError(
+            "No config file specified.\n"
+            "You must define a configuration file to run this script.\n"
+            "Example usage: python3 scripts/train.py --config-name=lsmm\n"
+        )
+
     config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=False)
     upload_to_wandb = config["training"]["upload_to_wandb"]
 
@@ -43,8 +40,8 @@ def main(cfg: DictConfig):
         config["training"]["minibatch_size"] = 4
         config["training"]["num_updates_per_batch"] = 1
         config["eval"]["nr_eval_envs"] = 2
-    
-    #Load PPO implementaiton
+
+    # Load PPO implementaiton
     from rememberwalk.training.ppo import PPOTrainer
 
     setup = generate_setup(config)
@@ -54,26 +51,27 @@ def main(cfg: DictConfig):
         wandb.login()
 
         base_name = config.get("run_name", "experiment")
-        ckpt_dir,run = get_dir_and_run_for_checkpointing()
+        ckpt_dir, run = get_dir_and_run_for_checkpointing()
         save_run_config(ckpt_dir, config)
 
         hydra_overrides = HydraConfig.get().overrides.task
         if hydra_overrides:
             # If overrides exist (e.g., during a W&B sweep), stitch them together
-            clean_overrides = [o.replace('=', '-').replace('.', '_') for o in hydra_overrides]
+            clean_overrides = [o.replace("=", "-").replace(".", "_") for o in hydra_overrides]
             dynamic_part = "__".join(clean_overrides)
             final_run_name = f"{base_name}__{dynamic_part}_{run}"
         else:
             # If no overrides, just append the run number
             final_run_name = f"{base_name}_{run}"
-        
-        
-        #Init wandb
-        with wandb.init(project=config.get("wandb_project", "MazeNavigation"),name=f"{final_run_name}",config=config) as logger:
+
+        # Init wandb
+        with wandb.init(
+            project=config.get("wandb_project", "MazeNavigation"), name=f"{final_run_name}", config=config
+        ) as logger:
             env_setup = setup["env"]
             training_setup = setup["training"]
             environment = env_setup["mode"](env_setup)
-            trainer = PPOTrainer(environment,training_setup,ckpt_dir,run,seed=training_setup["seed"])
+            trainer = PPOTrainer(environment, training_setup, ckpt_dir, run, seed=training_setup["seed"])
             # Start training
             final_state = trainer.train(logger)
             wandb.finish()
@@ -81,12 +79,12 @@ def main(cfg: DictConfig):
 
     else:
         base_name = config.get("run_name", "experiment")
-        ckpt_dir,run = get_dir_and_run_for_checkpointing()
+        ckpt_dir, run = get_dir_and_run_for_checkpointing()
         save_run_config(ckpt_dir, config)
         hydra_overrides = HydraConfig.get().overrides.task
         if hydra_overrides:
             # If overrides exist (e.g., during a W&B sweep), stitch them together
-            clean_overrides = [o.replace('=', '-').replace('.', '_') for o in hydra_overrides]
+            clean_overrides = [o.replace("=", "-").replace(".", "_") for o in hydra_overrides]
             dynamic_part = "__".join(clean_overrides)
             final_run_name = f"{base_name}__{dynamic_part}_{run}"
         else:
@@ -95,12 +93,11 @@ def main(cfg: DictConfig):
         env_setup = setup["env"]
         training_setup = setup["training"]
         environment = env_setup["mode"](env_setup)
-        trainer = PPOTrainer(environment,training_setup,ckpt_dir,run,seed=training_setup["seed"])
+        trainer = PPOTrainer(environment, training_setup, ckpt_dir, run, seed=training_setup["seed"])
         # Start training
-        logger=EmptyLogger()
+        logger = EmptyLogger()
         final_state = trainer.train(logger)
         print_final_checkpoint(ckpt_dir, final_state)
-
 
 
 if __name__ == "__main__":

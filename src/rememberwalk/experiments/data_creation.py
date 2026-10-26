@@ -4,6 +4,7 @@ For each approach and run, the policy is rolled out on the shared eval mazes and
 ``<output_dir>/data/<approach>/run_<i>/eval_data.pkl`` is written with the per-step
 metrics of the approach's ``experiment_callback``. All figures are made from these files.
 """
+
 import json
 import pickle
 
@@ -11,30 +12,53 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from rememberwalk.experiments.rollout import build_environment, build_eval_dict, load_policy, reset_environments
+from rememberwalk.experiments.rollout import (
+    build_environment,
+    build_eval_dict,
+    load_policy,
+    reset_environments,
+)
 from rememberwalk.experiments.suite import Suite, environment_key, experiment_config
 
 
 def run_deterministic_evaluation(eval_dict: dict, key, env, actor_critic, step_fn, callback_fn):
+    """Deterministic rollout of ``env.episode_length`` steps with ``callback_fn`` (an experiment callback).
+
+    Metrics of envs whose episode already ended are masked to 0.
+
+    Returns:
+        (final eval_dict, per-step metrics (step, env, ...), key).
+    """
 
     def eval_step(carry, _):
+        """One callback step and env step for all envs."""
 
         def mask_single_env(is_terminated, single_env_metrics):
             return jax.tree_util.tree_map(
-                lambda m: jnp.where(is_terminated, jnp.zeros_like(m), m),
-                single_env_metrics
+                lambda m: jnp.where(is_terminated, jnp.zeros_like(m), m), single_env_metrics
             )
+
         eval_dict, key = carry
         eval_dict, metrics = callback_fn(actor_critic, eval_dict, env)
         nr_envs = eval_dict["state"].done.shape[0]
         state_keys = jax.random.split(key, nr_envs)
         next_state, state_keys = jax.vmap(step_fn)(eval_dict["state"], eval_dict["action"], state_keys)
         eval_dict["state"] = next_state
-        eval_dict["episode_lengths"] = jnp.where(eval_dict["envs_already_terminated"], eval_dict["episode_lengths"], next_state.n_steps)
+        eval_dict["episode_lengths"] = jnp.where(
+            eval_dict["envs_already_terminated"], eval_dict["episode_lengths"], next_state.n_steps
+        )
         masked_metrics = jax.vmap(mask_single_env)(eval_dict["envs_already_terminated"], metrics)
-        just_finished = ((eval_dict["state"].done | (eval_dict["state"].n_steps >= env.episode_length - 1)) & (~eval_dict["envs_already_terminated"].astype(jnp.bool_)))
-        eval_dict["summed_rewards"] = jnp.where(just_finished, eval_dict["state"].summed_reward, eval_dict["summed_rewards"])
-        eval_dict["envs_already_terminated"] = jnp.where(eval_dict["state"].done, jnp.ones_like(eval_dict["envs_already_terminated"]), eval_dict["envs_already_terminated"])
+        just_finished = (eval_dict["state"].done | (eval_dict["state"].n_steps >= env.episode_length - 1)) & (
+            ~eval_dict["envs_already_terminated"].astype(jnp.bool_)
+        )
+        eval_dict["summed_rewards"] = jnp.where(
+            just_finished, eval_dict["state"].summed_reward, eval_dict["summed_rewards"]
+        )
+        eval_dict["envs_already_terminated"] = jnp.where(
+            eval_dict["state"].done,
+            jnp.ones_like(eval_dict["envs_already_terminated"]),
+            eval_dict["envs_already_terminated"],
+        )
         return (eval_dict, state_keys[-1]), masked_metrics
 
     (eval_dict, key), metrics = jax.lax.scan(eval_step, (eval_dict, key), None, length=env.episode_length)
@@ -54,6 +78,11 @@ def _created_from(out_dir):
 
 
 def create_data(suite: Suite, force: bool = False):
+    """Rolls out every run of every non-imported approach and writes data/<approach>/run_<i>/eval_data.pkl.
+
+    Existing files are kept unless ``force``. One compiled environment is reused for the runs of an
+    approach.
+    """
     for approach in suite.approaches:
         print(f"=== Data creation: {approach.name} ({len(approach.runs)} runs)")
         if approach.imported:
@@ -77,8 +106,13 @@ def create_data(suite: Suite, force: bool = False):
             if key != built_for:
                 # Seeds of one approach share the compiled environment and rollout
                 environment, setup = build_environment(config)
-                env_state, env_keys = reset_environments(environment, suite.nr_envs, suite.randomization_key,
-                                                         suite.curriculum_level, suite.terrain_curriculum_level)
+                env_state, env_keys = reset_environments(
+                    environment,
+                    suite.nr_envs,
+                    suite.randomization_key,
+                    suite.curriculum_level,
+                    suite.terrain_curriculum_level,
+                )
                 built_for = key
             training_setup = setup["training"]
 
@@ -88,7 +122,12 @@ def create_data(suite: Suite, force: bool = False):
 
             print(f"   run {i + 1}: rolling out {run_path}")
             eval_dict, metrics, _ = evaluation_fn(
-                eval_dict, eval_key, environment, training_setup["actor_critic"], environment.step, training_setup["experiment_callback"]
+                eval_dict,
+                eval_key,
+                environment,
+                training_setup["actor_critic"],
+                environment.step,
+                training_setup["experiment_callback"],
             )
             save_dict = {
                 "policy": run_path,

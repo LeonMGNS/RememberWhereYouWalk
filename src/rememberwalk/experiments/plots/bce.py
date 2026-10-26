@@ -1,15 +1,23 @@
 """Maze reconstruction error (BCE) over time: one curve per approach, pooled over its runs."""
+
 import gc
 import pickle
 
-import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.lines import Line2D
-from matplotlib.ticker import MaxNLocator, MultipleLocator, FuncFormatter
+from matplotlib.ticker import FuncFormatter, MaxNLocator, MultipleLocator
 from matplotlib.transforms import Bbox
 
-from rememberwalk.experiments.plots.style import RC, FIGWIDTH_IN, FS_FOOTNOTE, CONTROL_DT, LINESTYLES, png_path
+from rememberwalk.experiments.plots.style import (
+    CONTROL_DT,
+    FIGWIDTH_IN,
+    FS_FOOTNOTE,
+    LINESTYLES,
+    RC,
+    png_path,
+)
 
 
 def _thousands(x, _pos):
@@ -58,6 +66,11 @@ def full_episode_only(episode_lengths, bce_error, label=""):
     return bce_error[:, keep]
 
 
+def _smooth(y, ker, pad):
+    """Moving average with edge padding, same length as y."""
+    return np.convolve(np.pad(y, pad, mode="edge"), ker, mode="same")[pad : -pad or None]
+
+
 def plot_bce_pooled(
     runs,
     out_path,
@@ -65,12 +78,12 @@ def plot_bce_pooled(
     linestyles=None,
     steps=None,
     ylim=None,
-    band="std",          # "std" | "sem" | "iqr"
+    band="std",  # "std" | "sem" | "iqr"
     band_alpha=0.16,
     smooth=0,
     figwidth_in=None,
     figheight_in=None,
-    title=""
+    title="",
 ):
     """One panel, one curve per approach, computed over the POOLED envs.
 
@@ -81,25 +94,30 @@ def plot_bce_pooled(
     colors : one RGB (0-1) per approach, in the order of runs.
     linestyles : optional dash pattern per approach (default: all solid).
     """
-    runs = {k: (np.concatenate([np.atleast_2d(np.asarray(a, float))
-                                for a in v], axis=1)
-                if isinstance(v, (list, tuple)) else np.asarray(v, float))
-            for k, v in runs.items()}
+    runs = {
+        k: (
+            np.concatenate([np.atleast_2d(np.asarray(a, float)) for a in v], axis=1)
+            if isinstance(v, (list, tuple))
+            else np.asarray(v, float)
+        )
+        for k, v in runs.items()
+    }
 
     # Dash patterns need a thinner stroke to stay readable where curves overlap
     linewidth = 1.3 if linestyles else 1.75
     lo_seen, hi_seen = [], []
     with mpl.rc_context(RC):
-        fig, ax = plt.subplots(figsize=(figwidth_in or FIGWIDTH_IN,
-                                        figheight_in or 1.7),
-                               layout="constrained")
+        fig, ax = plt.subplots(
+            figsize=(figwidth_in or FIGWIDTH_IN, figheight_in or 1.7), layout="constrained"
+        )
         fig.get_layout_engine().set(w_pad=0.01, h_pad=0.01)
 
         for k, (name, arr) in enumerate(runs.items()):
             arr = np.asarray(arr, dtype=float)
             mean = np.nanmean(arr, axis=1)
             if band == "std":
-                sdev = np.nanstd(arr, axis=1); lo, hi = mean - sdev, mean + sdev
+                sdev = np.nanstd(arr, axis=1)
+                lo, hi = mean - sdev, mean + sdev
             elif band == "sem":
                 n_alive = np.maximum((~np.isnan(arr)).sum(axis=1), 1)
                 sdev = np.nanstd(arr, axis=1) / np.sqrt(n_alive)
@@ -109,21 +127,24 @@ def plot_bce_pooled(
                 hi = np.nanpercentile(arr, 75, axis=1)
             else:
                 raise ValueError(band)
-            lo = np.maximum(lo, 0.0)    # BCE is non-negative
+            lo = np.maximum(lo, 0.0)  # BCE is non-negative
 
             if smooth > 1:
                 ker = np.ones(smooth) / smooth
                 pad = smooth // 2
-                sm = lambda y: np.convolve(np.pad(y, pad, mode="edge"),
-                                           ker, mode="same")[pad:-pad or None]
-                mean, lo, hi = sm(mean), sm(lo), sm(hi)
+                mean, lo, hi = (_smooth(y, ker, pad) for y in (mean, lo, hi))
 
             x = np.arange(mean.size) if steps is None else np.asarray(steps) * CONTROL_DT
             color = colors[k]
-            ax.fill_between(x, lo, hi, color=color, alpha=band_alpha,
-                            linewidth=0)
-            ax.plot(x, mean, color=color, label=name, linewidth=linewidth,
-                    linestyle=linestyles[k] if linestyles else "-")
+            ax.fill_between(x, lo, hi, color=color, alpha=band_alpha, linewidth=0)
+            ax.plot(
+                x,
+                mean,
+                color=color,
+                label=name,
+                linewidth=linewidth,
+                linestyle=linestyles[k] if linestyles else "-",
+            )
             lo_seen.append(float(np.nanmin(lo)))
             hi_seen.append(float(np.nanmax(hi)))
 
@@ -148,17 +169,28 @@ def plot_bce_pooled(
         # grid, thick colour swatches, no frame. Proxy handles so thickening
         # the swatches leaves the plotted curves untouched.
         handles = [
-            Line2D([], [], color=colors[k],
-                   linewidth=linewidth, solid_capstyle="butt",
-                   linestyle=linestyles[k] if linestyles else "-")
+            Line2D(
+                [],
+                [],
+                color=colors[k],
+                linewidth=linewidth,
+                solid_capstyle="butt",
+                linestyle=linestyles[k] if linestyles else "-",
+            )
             for k in range(len(runs))
         ]
-        fig.legend(handles, list(runs.keys()),
-                   loc="outside lower center", ncol=2,
-                   fontsize=8, frameon=False,
-                   columnspacing=1.6,
-                   handlelength=3.0 if linestyles else 1.6,   # long enough to show a full dash period
-                   handletextpad=0.5, labelspacing=0.35)
+        fig.legend(
+            handles,
+            list(runs.keys()),
+            loc="outside lower center",
+            ncol=2,
+            fontsize=8,
+            frameon=False,
+            columnspacing=1.6,
+            handlelength=3.0 if linestyles else 1.6,  # long enough to show a full dash period
+            handletextpad=0.5,
+            labelspacing=0.35,
+        )
 
         # --- centre the axes box on a fixed-width page --------------------
         # The y-label and tick labels extend only leftwards, so the default
@@ -171,7 +203,7 @@ def plot_bce_pooled(
         inv = fig.dpi_scale_trans.inverted()
         ab = ax.get_window_extent(fig.canvas.get_renderer()).transformed(inv)
         W, H = fig.get_size_inches()
-        extra = ab.x0 - (W - ab.x1)        # left overhead minus right overhead
+        extra = ab.x0 - (W - ab.x1)  # left overhead minus right overhead
         if extra > 0.005:
             fig.get_layout_engine().set(rect=(0, 0, max(1 - extra / W, 0.5), 1))
         page = Bbox([[0, 0], [W, H]])
@@ -182,13 +214,21 @@ def plot_bce_pooled(
 
 
 def make_bce_figure(suite, out_path, approaches=None, labels=None, colors=None, linestyles=None):
+    """Writes the map reconstruction error (BCE) over time, pooled over runs, of ``approaches`` (default:
+    all approaches of the suite) to ``out_path``.
+
+    ``labels`` are optional display names, one per approach. ``colors`` (0-1 RGB) and ``linestyles``
+    (names of ``style.LINESTYLES``) override the approach colours and the solid line.
+    """
     approaches = approaches or suite.approaches
     labels = labels or [a.name for a in approaches]
     # One run at a time: only the filtered (T, n_kept) arrays stay alive.
     runs = {}
-    for approach, label in zip(approaches, labels):
+    for approach, label in zip(approaches, labels, strict=True):
         runs[label] = [
-            full_episode_only(*load_bce_data(suite.data_dir(approach, i)), label=f"{approach.name} run {i + 1}")
+            full_episode_only(
+                *load_bce_data(suite.data_dir(approach, i)), label=f"{approach.name} run {i + 1}"
+            )
             for i in range(len(approach.runs))
         ]
 
@@ -208,7 +248,7 @@ def make_bce_figure(suite, out_path, approaches=None, labels=None, colors=None, 
         band_alpha=0.16 if len(runs) <= 4 else (0.035 if linestyles else 0.07),
         figheight_in=1.7 + 0.17 * max(legend_rows - 2, 0),
         steps=np.arange(T),
-        ylim=None,      # set e.g. (0.10, 0.45) to pin it across figures
+        ylim=None,  # set e.g. (0.10, 0.45) to pin it across figures
         band="std",
         smooth=51,
     )

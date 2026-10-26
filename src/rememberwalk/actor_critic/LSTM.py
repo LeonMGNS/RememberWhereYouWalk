@@ -1,13 +1,21 @@
+"""LSTM baseline (``actor_critic.LSTM.ActorCritic``): a recurrent core stepped once per env step.
+
+The SRU ablation subclasses this module and only swaps the core (``make_core``).
+"""
+
+import flax
+import flax.linen as nn
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
-from rememberwalk.actor_critic.BaseActorCritic import BaseActorCritic
 import optax
-import flax
+
+from rememberwalk.actor_critic.BaseActorCritic import BaseActorCritic
 
 
 @flax.struct.dataclass
 class Params:
+    """Network parameters. Field names are part of the checkpoint format: do not rename."""
+
     policy_parameters: jnp.ndarray
     value_parameters: jnp.ndarray
     lstm_parameters: jnp.ndarray
@@ -20,6 +28,7 @@ class Params:
 @flax.struct.dataclass
 class TrainingState:
     """Contains training state for the learner."""
+
     optimizer_state: optax.OptState
     params: Params
     training_steps: jnp.ndarray
@@ -28,6 +37,8 @@ class TrainingState:
 
 @flax.struct.dataclass
 class Transition:
+    """One rollout step, as stored for the PPO update (leading axes: unroll step, env)."""
+
     done: jnp.ndarray
     truncation: jnp.ndarray
     actor_observation: jnp.ndarray
@@ -54,6 +65,7 @@ class LSTM(nn.Module):
     recurrent state by exactly one step, which makes it trivial to unroll the
     core on its own via ``jax.lax.scan`` in the loss function.
     """
+
     hidden_size: int
     memory_output_features: int
 
@@ -75,23 +87,24 @@ class LSTM(nn.Module):
 
 
 class ActorCritic(BaseActorCritic):
+    """LSTM actor-critic; ``config`` is the actor-critic dict of ``generate_setup``."""
 
     def __init__(self, config: dict):
         super().__init__()
-        actor_observation_size            = config["actor_observation_size"]
-        actor_output_size                 = config["actor_output_size"]
-        value_observation_size            = config["value_observation_size"]
-        height_sample_size                = config["height_sample_size"]
-        critic_height_sample_size         = config["critic_height_sample_size"]
-        height_encoder_size               = config["height_encoder_size"]
-        distribution_size                 = config["distribution_size"]
+        actor_observation_size = config["actor_observation_size"]
+        actor_output_size = config["actor_output_size"]
+        value_observation_size = config["value_observation_size"]
+        height_sample_size = config["height_sample_size"]
+        critic_height_sample_size = config["critic_height_sample_size"]
+        height_encoder_size = config["height_encoder_size"]
+        distribution_size = config["distribution_size"]
         lstm_hidden_size, lstm_memory_output_features = self.core_sizes(config)
-        min_scale                         = config.get("min_scale", 0.001)
-        max_scale                         = config.get("max_scale", 2.0)
-        seed                              = config.get("seed", 0)
-        actor_layer_sizes                 = config.get("actor_layer_sizes", [512, 256, 128])
-        critic_layer_sizes                = config.get("critic_layer_sizes", [512, 256, 128])
-        actor_height_encoder_layer_sizes  = config.get("actor_height_encoder_layer_sizes", [256, 128])
+        min_scale = config.get("min_scale", 0.001)
+        max_scale = config.get("max_scale", 2.0)
+        seed = config.get("seed", 0)
+        actor_layer_sizes = config.get("actor_layer_sizes", [512, 256, 128])
+        critic_layer_sizes = config.get("critic_layer_sizes", [512, 256, 128])
+        actor_height_encoder_layer_sizes = config.get("actor_height_encoder_layer_sizes", [256, 128])
         critic_height_encoder_layer_sizes = config.get("critic_height_encoder_layer_sizes", [512, 256])
 
         self.min_scale = min_scale
@@ -115,8 +128,14 @@ class ActorCritic(BaseActorCritic):
 
         # Init actor, critic, height encoders and heads
         self.init_shared_networks(
-            keys={"actor": init_keys[0], "critic": init_keys[1], "cross_entropy": init_keys[3], "linear_velocity": init_keys[4],
-                  "height_encoder": init_keys[6], "critic_height_encoder": init_keys[7]},
+            keys={
+                "actor": init_keys[0],
+                "critic": init_keys[1],
+                "cross_entropy": init_keys[3],
+                "linear_velocity": init_keys[4],
+                "height_encoder": init_keys[6],
+                "critic_height_encoder": init_keys[7],
+            },
             actor_memory_size=lstm_memory_output_features,
             head_memory_size=self.lstm_memory_output_features,
             actor_layer_sizes=actor_layer_sizes,
@@ -128,7 +147,9 @@ class ActorCritic(BaseActorCritic):
         # Init the recurrent core
         self.lstm = self.make_core(config)
         dummy_carry = (jnp.zeros((1, lstm_hidden_size)), jnp.zeros((1, lstm_hidden_size)))
-        self.init_lstm_nn_params = self.lstm.init(init_keys[2], dummy_carry, jnp.zeros((1, self.lstm_input_size)))
+        self.init_lstm_nn_params = self.lstm.init(
+            init_keys[2], dummy_carry, jnp.zeros((1, self.lstm_input_size))
+        )
 
         self.params = Params(
             policy_parameters=self.init_actor_nn_params,
@@ -150,19 +171,31 @@ class ActorCritic(BaseActorCritic):
         )
 
     def core_sizes(self, config: dict):
-        """(hidden size, output feature size) of the core. Falls back to the transformer keys so existing configs keep working."""
+        """(hidden size, output feature size) of the core.
+
+        Falls back to the transformer keys so existing configs keep working.
+        """
         lstm_hidden_size = config.get("lstm_hidden_size", config.get("transformer_hidden_size", 256))
-        lstm_memory_output_features = config.get("lstm_memory_output_features", config.get("transformer_memory_output_features"))
+        lstm_memory_output_features = config.get(
+            "lstm_memory_output_features", config.get("transformer_memory_output_features")
+        )
         return lstm_hidden_size, lstm_memory_output_features
 
     def make_core(self, config: dict) -> nn.Module:
-        return LSTM(hidden_size=self.lstm_hidden_size, memory_output_features=self.lstm_memory_output_features)
+        """The recurrent core (overridden by the SRU ablation)."""
+        return LSTM(
+            hidden_size=self.lstm_hidden_size, memory_output_features=self.lstm_memory_output_features
+        )
 
     def create_optimizer_and_training_state(self, train_cfg: dict):
+        """Returns (optimizer, TrainingState) with zero (c, h) states of shape (nr_envs, hidden size)."""
         nr_envs = train_cfg["nr_envs"]
         optimizer = self.create_optimizer(train_cfg)
 
-        initial_lstm_state = (jnp.zeros((nr_envs, self.lstm_hidden_size)),jnp.zeros((nr_envs, self.lstm_hidden_size)))
+        initial_lstm_state = (
+            jnp.zeros((nr_envs, self.lstm_hidden_size)),
+            jnp.zeros((nr_envs, self.lstm_hidden_size)),
+        )
 
         training_state = TrainingState(
             optimizer_state=optimizer.init(self.params),
@@ -179,11 +212,14 @@ class ActorCritic(BaseActorCritic):
         recurrent core across steps without depending on a particular state type.
         """
         nr_eval_envs = eval_cfg.get("nr_eval_envs", 1)
-        empty_state_single = (jnp.zeros((1, self.lstm_hidden_size)),jnp.zeros((1, self.lstm_hidden_size)))
-        empty_state_batch = (jnp.zeros((nr_eval_envs, self.lstm_hidden_size)),jnp.zeros((nr_eval_envs, self.lstm_hidden_size)))
+        empty_state_single = (jnp.zeros((1, self.lstm_hidden_size)), jnp.zeros((1, self.lstm_hidden_size)))
+        empty_state_batch = (
+            jnp.zeros((nr_eval_envs, self.lstm_hidden_size)),
+            jnp.zeros((nr_eval_envs, self.lstm_hidden_size)),
+        )
 
         visualizer_dict = {
-            "action":     jnp.zeros((self.action_size,)),
+            "action": jnp.zeros((self.action_size,)),
             "lstm_state": empty_state_single,
         }
         eval_dict = {
@@ -191,8 +227,15 @@ class ActorCritic(BaseActorCritic):
         }
         return visualizer_dict, eval_dict
 
-    def update_lstm(self, parameters: Params, lstm_state, observation: jnp.ndarray,
-                    height_encoded: jnp.ndarray, pred_linear_velocity: jnp.ndarray,true_pos:jnp.ndarray):
+    def update_lstm(
+        self,
+        parameters: Params,
+        lstm_state,
+        observation: jnp.ndarray,
+        height_encoded: jnp.ndarray,
+        pred_linear_velocity: jnp.ndarray,
+        true_pos: jnp.ndarray,
+    ):
         """Advance the LSTM by exactly one step.
 
         Mirrors ``update_matrix_memory``: it takes the current recurrent state,
@@ -200,17 +243,15 @@ class ActorCritic(BaseActorCritic):
         heads consume. Because it is a pure single step it can be unrolled with
         ``jax.lax.scan`` in the loss, independently of every head.
 
-        Returns
-        -------
-        new_lstm_state : tuple (c, h)
-        lstm_encoding  : (-1, lstm_memory_output_features)
+        Returns:
+            (new state (c, h), encoding (batch, lstm_memory_output_features)).
         """
         lstm_input = jnp.concatenate(
             [
                 observation.reshape((-1, self.actor_observation_size)),
                 height_encoded.reshape((-1, self.height_encoder_size)),
                 pred_linear_velocity.reshape((-1, 3)),
-                true_pos.reshape((-1,3))
+                true_pos.reshape((-1, 3)),
             ],
             axis=-1,
         )
@@ -218,36 +259,96 @@ class ActorCritic(BaseActorCritic):
         lstm_encoding = lstm_encoding.reshape((-1, self.lstm_memory_output_features))
         return new_lstm_state, lstm_encoding
 
-    def sample_action(self, parameters: Params, observation: jnp.ndarray, height_observation: jnp.ndarray,
-                      lstm_state,true_pos, key: jnp.ndarray):
+    def sample_action(
+        self,
+        parameters: Params,
+        observation: jnp.ndarray,
+        height_observation: jnp.ndarray,
+        lstm_state,
+        true_pos,
+        key: jnp.ndarray,
+    ):
+        """Samples an action for a batch of envs and steps the core once.
+
+        Args:
+            observation: (batch, actor_observation_size).
+            height_observation: (batch, height_sample_size).
+            lstm_state: (c, h), each (batch, hidden size).
+            true_pos: (batch, 3) noisy x, y, yaw.
+            key: PRNG key of the action noise.
+
+        Returns:
+            (action, scale, log_prob (batch, 1), height_encoded, predicted map logits,
+            predicted linear velocity, new state (c, h)).
+        """
         height_encoded = self.encode_height(parameters, height_observation)
         pred_linear_vel = self.predict_linear_velocity(parameters, observation)
-        new_lstm_state, lstm_encoding = self.update_lstm(parameters, lstm_state, observation, height_encoded, pred_linear_vel,true_pos)
+        new_lstm_state, lstm_encoding = self.update_lstm(
+            parameters, lstm_state, observation, height_encoded, pred_linear_vel, true_pos
+        )
 
         loc, scale = self.actor_distribution(
             parameters,
-            jnp.concatenate([observation.reshape((-1, self.actor_observation_size)), height_encoded, lstm_encoding], axis=-1),
+            jnp.concatenate(
+                [observation.reshape((-1, self.actor_observation_size)), height_encoded, lstm_encoding],
+                axis=-1,
+            ),
         )
         action, log_prob = self.sample_from_distribution(loc, scale, key)
 
-        predicted_distribution = self.predict_distribution(parameters, observation, lstm_encoding, height_encoded)
-        return action, scale, log_prob, height_encoded, predicted_distribution, pred_linear_vel, new_lstm_state
+        predicted_distribution = self.predict_distribution(
+            parameters, observation, lstm_encoding, height_encoded
+        )
+        return (
+            action,
+            scale,
+            log_prob,
+            height_encoded,
+            predicted_distribution,
+            pred_linear_vel,
+            new_lstm_state,
+        )
 
-    def get_deterministic_action(self, parameters: Params, observation: jnp.ndarray, height_observation: jnp.ndarray, lstm_state,true_pos:jnp.ndarray):
+    def get_deterministic_action(
+        self,
+        parameters: Params,
+        observation: jnp.ndarray,
+        height_observation: jnp.ndarray,
+        lstm_state,
+        true_pos: jnp.ndarray,
+    ):
+        """Mean action for a batch of envs and one core step.
+
+        Returns:
+            (loc, predicted map logits, height_encoded, predicted linear velocity, new state (c, h)).
+        """
         height_encoded = self.encode_height(parameters, height_observation)
         pred_linear_vel = self.predict_linear_velocity(parameters, observation)
-        new_lstm_state, lstm_encoding = self.update_lstm(parameters, lstm_state, observation, height_encoded, pred_linear_vel,true_pos)
+        new_lstm_state, lstm_encoding = self.update_lstm(
+            parameters, lstm_state, observation, height_encoded, pred_linear_vel, true_pos
+        )
 
         loc, scale = self.actor.apply(
             parameters.policy_parameters,
-            jnp.concatenate([observation.reshape((-1, self.actor_observation_size)), height_encoded, lstm_encoding], axis=-1),
+            jnp.concatenate(
+                [observation.reshape((-1, self.actor_observation_size)), height_encoded, lstm_encoding],
+                axis=-1,
+            ),
         )
 
-        predicted_distribution = self.predict_distribution(parameters, observation, lstm_encoding, height_encoded)
+        predicted_distribution = self.predict_distribution(
+            parameters, observation, lstm_encoding, height_encoded
+        )
         return loc, predicted_distribution, height_encoded, pred_linear_vel, new_lstm_state
 
-    def log_prob_from_observation(self, actions, parameters: Params, observation: jnp.ndarray,
-                                  height_observation: jnp.ndarray, lstm_encoding: jnp.ndarray):
+    def log_prob_from_observation(
+        self,
+        actions,
+        parameters: Params,
+        observation: jnp.ndarray,
+        height_observation: jnp.ndarray,
+        lstm_encoding: jnp.ndarray,
+    ):
         """Apply the heads given an ALREADY-UNROLLED ``lstm_encoding``.
 
         The recurrent core is unrolled separately (by scanning ``update_lstm``)
@@ -259,10 +360,15 @@ class ActorCritic(BaseActorCritic):
 
         loc, scale = self.actor_distribution(
             parameters,
-            jnp.concatenate([observation.reshape((-1, self.actor_observation_size)), height_encoded, lstm_encoding], axis=-1),
+            jnp.concatenate(
+                [observation.reshape((-1, self.actor_observation_size)), height_encoded, lstm_encoding],
+                axis=-1,
+            ),
         )
         log_prob = self.log_prob(actions, loc, scale)
         log_prob = jnp.expand_dims(log_prob, axis=-1)
 
-        predicted_distribution = self.predict_distribution(parameters, observation, lstm_encoding, height_encoded)
+        predicted_distribution = self.predict_distribution(
+            parameters, observation, lstm_encoding, height_encoded
+        )
         return log_prob, loc, scale, predicted_distribution

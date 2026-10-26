@@ -62,6 +62,8 @@ extend-exclude = ["outputs", "scripts/outputs", "scripts/wandb", "checkpoints", 
 [tool.ruff.lint]
 # pyflakes, pycodestyle, import sorting, pyupgrade, bugbear
 select = ["F", "E", "W", "I", "UP", "B"]
+# B008: flax initializers (orthogonal(...), constant(...)) as default arguments are idiomatic and immutable
+ignore = ["B008"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["rememberwalk"]

@@ -1,3 +1,5 @@
+"""Supervision target of the linear velocity head."""
+
 import jax.numpy as jnp
 from jax.scipy.spatial.transform import Rotation
 

@@ -1,14 +1,20 @@
-"""PPO loss of the history-based approaches (Transformer, FixedWindow): the observation history is rebuilt from the
-rollout and the policy is re-evaluated on it. Configs reach it through transformer_loss and fixed_window_loss."""
+"""PPO loss of the history-based approaches (Transformer, FixedWindow): the observation history is rebuilt
+from the
+rollout and the policy is re-evaluated on it. Configs reach it through transformer_loss and
+fixed_window_loss."""
+
+import jax
 import jax.numpy as jnp
+
 from rememberwalk.actor_critic.Transformer import Params, Transition
-from rememberwalk.training.ppo import PPOTrainer
 from rememberwalk.training.bce import compute_bce_loss
 from rememberwalk.training.loss_functions.common import compute_gae, interpolate_entropy_cost
-import jax
-from typing import Tuple
+from rememberwalk.training.ppo import PPOTrainer
 
-def create_observation_history(encoded_observations: jnp.ndarray, dones: jnp.ndarray, seq_len: int) -> jnp.ndarray:
+
+def create_observation_history(
+    encoded_observations: jnp.ndarray, dones: jnp.ndarray, seq_len: int
+) -> jnp.ndarray:
     """Reconstruct the causal observation history used by the transformer.
 
     For each timestep ``t`` the transformer received a window of the ``seq_len``
@@ -30,12 +36,13 @@ def create_observation_history(encoded_observations: jnp.ndarray, dones: jnp.nda
     """
     nr_envs, T, enc_size = encoded_observations.shape
     # Transpose so lax.scan iterates over timesteps (T-first).
-    obs_T  = encoded_observations.swapaxes(0, 1)   # (T, nr_envs, enc_size)
-    done_T = dones.swapaxes(0, 1)                  # (T, nr_envs)
+    obs_T = encoded_observations.swapaxes(0, 1)  # (T, nr_envs, enc_size)
+    done_T = dones.swapaxes(0, 1)  # (T, nr_envs)
 
     def step(carry, inputs):
-        history = carry                             # (nr_envs, seq_len, enc_size)
-        obs, done = inputs                          # (nr_envs, enc_size), (nr_envs,)
+        """Shifts the window by one step; clears it after a done."""
+        history = carry  # (nr_envs, seq_len, enc_size)
+        obs, done = inputs  # (nr_envs, enc_size), (nr_envs,)
         # The history *before* adding the current obs is what the transformer saw.
         output = history
         # Roll and insert the current obs at the last position.
@@ -47,25 +54,48 @@ def create_observation_history(encoded_observations: jnp.ndarray, dones: jnp.nda
 
     init = jnp.zeros((nr_envs, seq_len, enc_size))
     _, histories = jax.lax.scan(step, init, (obs_T, done_T))  # histories: (T, nr_envs, seq_len, enc_size)
-    return histories.swapaxes(0, 1)                            # (nr_envs, T, seq_len, enc_size)
+    return histories.swapaxes(0, 1)  # (nr_envs, T, seq_len, enc_size)
 
 
-def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, training_steps: jnp.ndarray, key: jnp.ndarray) -> Tuple:
+def loss_fn(
+    ppo_trainer: PPOTrainer,
+    params: Params,
+    transitions: Transition,
+    training_steps: jnp.ndarray,
+    key: jnp.ndarray,
+) -> tuple:
+    """PPO loss of one minibatch with the observation history.
+
+    Recomputes the memory over the stored rollout (rebuilding each step's history window from the
+    rollout with ``create_observation_history``), then the policy, value, entropy, map reconstruction
+    (BCE) and linear velocity losses. Gradients flow through the memory into the history encoder, the
+    height encoder and the heads.
+
+    Args:
+        ppo_trainer: the trainer (hyperparameters and networks).
+        params: Params being optimised.
+        transitions: Transition of the minibatch, axes (env, unroll step, ...).
+        training_steps: env steps so far (entropy schedule).
+        key: PRNG key.
+
+    Returns:
+        (total loss, (dict of loss metrics, key)).
+    """
     transitions = jax.tree_util.tree_map(lambda x: jnp.swapaxes(x, 0, 1), transitions)
 
-    rewards       = jnp.expand_dims(transitions.reward, axis=-1)
-    dones         = jnp.expand_dims(transitions.done,   axis=-1)
-    truncations   = jnp.expand_dims(transitions.truncation, axis=-1)
+    rewards = jnp.expand_dims(transitions.reward, axis=-1)
+    dones = jnp.expand_dims(transitions.done, axis=-1)
+    truncations = jnp.expand_dims(transitions.truncation, axis=-1)
     data_log_prob = transitions.log_prob
     actor_actions = transitions.action
-    actor_obs     = transitions.actor_observation
-    actor_h_obs   = transitions.actor_height_observation
-    critic_obs    = transitions.critic_observation
-    critic_h_obs  = transitions.critic_height_observation
+    actor_obs = transitions.actor_observation
+    actor_h_obs = transitions.actor_height_observation
+    critic_obs = transitions.critic_observation
+    critic_h_obs = transitions.critic_height_observation
     critic_next_h = transitions.critic_next_height_observation
-    critic_next   = transitions.critic_next_observation
-    true_lin_vel  = transitions.linear_velocity
-    true_dist     = transitions.true_distribution
+    critic_next = transitions.critic_next_observation
+    true_lin_vel = transitions.linear_velocity
+    true_dist = transitions.true_distribution
     noisy_true_pos = transitions.noisy_true_pos
 
     seq_len = ppo_trainer.actor_critic.sequence_length
@@ -75,61 +105,83 @@ def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, tr
     height_encoded = ppo_trainer.actor_critic.height_encoder.apply(
         params.height_encoder_parameters, actor_h_obs
     )
-    pred_linear_vel = ppo_trainer.actor_critic.linear_velocity_head.apply(params.linear_velocity_parameters,actor_obs)
+    pred_linear_vel = ppo_trainer.actor_critic.linear_velocity_head.apply(
+        params.linear_velocity_parameters, actor_obs
+    )
 
     # Build the [actor_obs || encoded_height] sequence and reconstruct causal histories.
-    encoded_seq = jnp.concatenate([actor_obs, height_encoded,jax.lax.stop_gradient(pred_linear_vel),noisy_true_pos], axis=-1)  # (nr_envs, T, input_size)
+    encoded_seq = jnp.concatenate(
+        [actor_obs, height_encoded, jax.lax.stop_gradient(pred_linear_vel), noisy_true_pos], axis=-1
+    )  # (nr_envs, T, input_size)
     obs_histories = create_observation_history(encoded_seq, transitions.done, seq_len)
     # obs_histories: (nr_envs, T, seq_len, input_size)
 
     # Recompute log-probabilities with the current policy parameters.
-    current_log_prob, current_loc, current_scale,predicted_distribution = jax.vmap(
+    current_log_prob, current_loc, current_scale, predicted_distribution = jax.vmap(
         ppo_trainer.actor_critic.log_prob_from_observation, (0, None, 0, 0, 0)
     )(actor_actions, params, actor_obs, actor_h_obs, obs_histories)
 
-    baseline         = jax.vmap(ppo_trainer.actor_critic.evaluate_actions, (None, 0, 0))(params, critic_obs, critic_h_obs)
-    bootstrap_value  = ppo_trainer.actor_critic.evaluate_actions(params, critic_next[-1], critic_next_h[-1])
+    baseline = jax.vmap(ppo_trainer.actor_critic.evaluate_actions, (None, 0, 0))(
+        params, critic_obs, critic_h_obs
+    )
+    bootstrap_value = ppo_trainer.actor_critic.evaluate_actions(params, critic_next[-1], critic_next_h[-1])
 
-    terminated_bv    = jnp.zeros_like(bootstrap_value)
-    bootstrap_value  = jnp.where(dones[-1], terminated_bv, bootstrap_value)
-    next_value       = jnp.concatenate([baseline[1:], jnp.expand_dims(bootstrap_value, 0)], axis=0)
+    terminated_bv = jnp.zeros_like(bootstrap_value)
+    bootstrap_value = jnp.where(dones[-1], terminated_bv, bootstrap_value)
+    next_value = jnp.concatenate([baseline[1:], jnp.expand_dims(bootstrap_value, 0)], axis=0)
 
-    accs = compute_gae(rewards, baseline, next_value, dones, truncations, ppo_trainer.discount_factor, ppo_trainer.gae_lambda)
-    vs          = jax.lax.stop_gradient(accs+baseline)
-    advantages  = jax.lax.stop_gradient(accs)
-    advantages  = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+    accs = compute_gae(
+        rewards, baseline, next_value, dones, truncations, ppo_trainer.discount_factor, ppo_trainer.gae_lambda
+    )
+    vs = jax.lax.stop_gradient(accs + baseline)
+    advantages = jax.lax.stop_gradient(accs)
+    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-    log_diff    = jnp.clip(current_log_prob - data_log_prob, -20.0, 20.0)
-    rho         = jnp.exp(log_diff)
-    surrogate1  = rho * advantages
-    surrogate2  = jnp.clip(rho, 1 - ppo_trainer.clipping_epsilon, 1 + ppo_trainer.clipping_epsilon) * advantages
-    policy_loss = ppo_trainer.training_config["policy_loss_scaling_factor"] * -jnp.mean(jnp.minimum(surrogate1, surrogate2))
+    log_diff = jnp.clip(current_log_prob - data_log_prob, -20.0, 20.0)
+    rho = jnp.exp(log_diff)
+    surrogate1 = rho * advantages
+    surrogate2 = (
+        jnp.clip(rho, 1 - ppo_trainer.clipping_epsilon, 1 + ppo_trainer.clipping_epsilon) * advantages
+    )
+    policy_loss = ppo_trainer.training_config["policy_loss_scaling_factor"] * -jnp.mean(
+        jnp.minimum(surrogate1, surrogate2)
+    )
 
-    v_loss      = ppo_trainer.training_config["value_loss_scaling_factor"] * jnp.mean((vs - baseline) ** 2) * 0.5
+    v_loss = ppo_trainer.training_config["value_loss_scaling_factor"] * jnp.mean((vs - baseline) ** 2) * 0.5
 
-    entropy_cost  = interpolate_entropy_cost(ppo_trainer.min_entropy_cost, ppo_trainer.max_entropy_cost, training_steps,float(ppo_trainer.training_steps))
-    entropy       = jnp.mean(ppo_trainer.actor_critic.entropy(current_loc, current_scale))
-    entropy_loss  = entropy_cost * -entropy
+    entropy_cost = interpolate_entropy_cost(
+        ppo_trainer.min_entropy_cost,
+        ppo_trainer.max_entropy_cost,
+        training_steps,
+        float(ppo_trainer.training_steps),
+    )
+    entropy = jnp.mean(ppo_trainer.actor_critic.entropy(current_loc, current_scale))
+    entropy_loss = entropy_cost * -entropy
 
     # Head losses
     # BCE Loss
-    bce_error = jnp.mean(compute_bce_loss(predicted_distribution,true_dist))
-    bce_loss = ppo_trainer.training_config["bce_loss_scaling_factor"] * jnp.mean(compute_bce_loss(predicted_distribution,true_dist))
+    bce_error = jnp.mean(compute_bce_loss(predicted_distribution, true_dist))
+    bce_loss = ppo_trainer.training_config["bce_loss_scaling_factor"] * jnp.mean(
+        compute_bce_loss(predicted_distribution, true_dist)
+    )
 
-    #Linear Velocity loss 
+    # Linear Velocity loss
     linear_velocity_error = true_lin_vel - pred_linear_vel
     linear_velocity_error_log = jnp.mean(jnp.abs(linear_velocity_error))
-    linear_velocity_error_loss = ppo_trainer.training_config["linear_velocity_loss_scaling_factor"] * jnp.mean(linear_velocity_error*linear_velocity_error)*0.5
-    
+    linear_velocity_error_loss = (
+        ppo_trainer.training_config["linear_velocity_loss_scaling_factor"]
+        * jnp.mean(linear_velocity_error * linear_velocity_error)
+        * 0.5
+    )
 
-    approx_kl   = jnp.mean((rho - 1) - log_diff)
-    total_loss  = policy_loss + v_loss + entropy_loss  +  bce_loss + linear_velocity_error_loss
+    approx_kl = jnp.mean((rho - 1) - log_diff)
+    total_loss = policy_loss + v_loss + entropy_loss + bce_loss + linear_velocity_error_loss
 
     losses = {
-        "total_loss":    total_loss,
-        "policy_loss":   policy_loss,
-        "v_loss":        v_loss,
-        "entropy_loss":  entropy_loss,
+        "total_loss": total_loss,
+        "policy_loss": policy_loss,
+        "v_loss": v_loss,
+        "entropy_loss": entropy_loss,
         "approx_kl_div": approx_kl,
         "bce_loss": bce_loss,
         "bce_error": bce_error,

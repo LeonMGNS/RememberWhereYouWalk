@@ -12,6 +12,7 @@ Goldens are backend specific: to test on GPU, set JAX_PLATFORMS=cuda and record 
 goldens. GPU scatter/reduction kernels are nondeterministic by default (~1e-4 drift between
 two identical runs); the deterministic-ops flag below makes GPU runs bit-identical.
 """
+
 import os
 
 # Must be set before JAX initialises its backend
@@ -37,15 +38,20 @@ ATOL = float(os.environ.get("GOLDEN_ATOL", 0.0))
 
 
 def pytest_addoption(parser):
-    parser.addoption("--update-golden", action="store_true",
-                     help="Write the current outputs as golden files instead of comparing.")
+    parser.addoption(
+        "--update-golden",
+        action="store_true",
+        help="Write the current outputs as golden files instead of comparing.",
+    )
 
 
 def pytest_collection_modifyitems(items):
     """Group the tests by config, so build_cache builds every config only once."""
+
     def config_of(item):
         params = getattr(item, "callspec", None)
         return params.params.get("name", params.params.get("config", "")) if params else ""
+
     order = {item: i for i, item in enumerate(items)}
     items.sort(key=lambda item: (config_of(item), order[item]))
 
@@ -72,6 +78,7 @@ def build_cache(tmp_path_factory):
             jax.clear_caches()
             current[name] = harness.build(name, root / name)
         return current[name]
+
     return build
 
 
@@ -96,6 +103,7 @@ def golden(request):
         else:
             with np.load(path) as expected:
                 _compare_arrays(dict(expected), result)
+
     return check
 
 

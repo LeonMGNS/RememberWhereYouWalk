@@ -1,12 +1,20 @@
+"""Unitree Go2 robot (``imports.robot``)."""
+
+from copy import deepcopy
+
+import jax.numpy as jnp
+import mujoco
+import mujoco.mjx as mjx
+
 from rememberwalk.robots.BaseRobot import BaseRobot
 from rememberwalk.utils.paths import ASSETS_DIR
-import mujoco
-import jax.numpy as jnp
-import mujoco.mjx as mjx
-from copy import deepcopy
 
 
 class GO2(BaseRobot):
+    """Unitree Go2 loaded from ``assets/go2/go2_<model>.xml`` (``robot.config`` selects the model).
+
+    Collects joint addresses and limits, foot and body geom ids, PD gains, nominal pose and action scaling.
+    """
 
     def __init__(self, model="mjx") -> None:
         super().__init__()
@@ -17,7 +25,9 @@ class GO2(BaseRobot):
         self.actuators_id = []
         for i in range(self.model.actuator_actnum.shape[0]):
             self.actuators.append(self.model.actuator(i).name)
-            self.actuators_id.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, self.model.actuator(i).name))
+            self.actuators_id.append(
+                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, self.model.actuator(i).name)
+            )
 
         self.actuators_id = jnp.asarray(self.actuators_id)
 
@@ -27,7 +37,6 @@ class GO2(BaseRobot):
         self.joint_qpos_size = []
         self.joint_qvel_adr = []
         for joint_id in range(self.model.njnt):
-
             if self.model.jnt_type[joint_id] == mujoco.mjtJoint.mjJNT_FREE:
                 self.local_linear_qvel_adr = jnp.arange(
                     self.model.jnt_dofadr[joint_id],
@@ -50,7 +59,7 @@ class GO2(BaseRobot):
 
             self.joint_qpos_adr.append(self.model.jnt_qposadr[joint_id])
             self.joint_qvel_adr.append(self.model.jnt_dofadr[joint_id])
-        
+
         self.actuator_joint_ids = jnp.array(self.actuator_joint_ids)
         self.joint_limits = jnp.array(self.joint_limits)
         self.soft_joint_position_limit = 0.9
@@ -59,24 +68,20 @@ class GO2(BaseRobot):
         joint_limits_range = jnp.abs(self.joint_limits[:, 1] - self.joint_limits[:, 0])
         self.joint_limits_range = joint_limits_range
         self.soft_joint_limits = self.joint_limits.at[:, 0].set(
-            joint_limits_midpoint
-            - joint_limits_range / 2 * self.soft_joint_position_limit
+            joint_limits_midpoint - joint_limits_range / 2 * self.soft_joint_position_limit
         )
         self.soft_joint_limits = self.soft_joint_limits.at[:, 1].set(
-            joint_limits_midpoint
-            + joint_limits_range / 2 * self.soft_joint_position_limit
+            joint_limits_midpoint + joint_limits_range / 2 * self.soft_joint_position_limit
         )
-        self.joint_qpos_adr = jnp.array(self.joint_qpos_adr)  #
-        self.joint_qvel_adr = jnp.array(self.joint_qvel_adr)  #
+        self.joint_qpos_adr = jnp.array(self.joint_qpos_adr)
+        self.joint_qvel_adr = jnp.array(self.joint_qvel_adr)
 
         feet_names = ["RL_calf", "RR_calf", "FR_calf", "FL_calf"]
         body_ids = []
         for body in feet_names:
-            body_ids.append(
-                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, body)
-            )
+            body_ids.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, body))
         self.trunk_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "trunk")
-        self.geom_ids = []  #
+        self.geom_ids = []
         geom_check_hfield_names = [
             "FL_hip_geom",
             "FL_thigh_geom",
@@ -112,52 +117,50 @@ class GO2(BaseRobot):
                 mujoco.mjtObj.mjOBJ_GEOM,
                 "floor",
             )
-        )  #
-        self.base_geom_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "base_coll_geom",
-                                              )
+        )
+        self.base_geom_id = mujoco.mj_name2id(
+            self.model,
+            mujoco.mjtObj.mjOBJ_GEOM,
+            "base_coll_geom",
+        )
         self.contact_ids = []
         self.geom_feet_ids = jnp.array(self.geom_ids[:4])
         self.non_feet_geom_ids = []
         for body in geom_check_hfield_names:
-            self.non_feet_geom_ids.append(
-                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, body)
-            )
-        
+            self.non_feet_geom_ids.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, body))
+
         self.base_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "base")
         self.non_feet_geom_ids = jnp.array(self.non_feet_geom_ids, dtype=jnp.int32)
         self.geom_ids = jnp.array(self.geom_ids, dtype=jnp.int32)
         non_feet_filter = jnp.isin(
             self.non_feet_geom_ids,
             self.geom_ids,
-            invert=True,)
+            invert=True,
+        )
         self.all_geom_ids = jnp.arange(self.model.ngeom, dtype=jnp.int32)
         self.non_feet_geom_ids = self.non_feet_geom_ids[non_feet_filter]
 
         self.pair_ids = []
         for i in range(len(self.geom_feet_names)):
-            idx = self.get_pair_index(self.geom_feet_names[i],"floor")
+            idx = self.get_pair_index(self.geom_feet_names[i], "floor")
             self.pair_ids.append(idx)
 
-        self.pair_ids = jnp.asarray(self.pair_ids,dtype=jnp.int32)
+        self.pair_ids = jnp.asarray(self.pair_ids, dtype=jnp.int32)
 
         self.lidar_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "Front-Lidar")
 
         self.geom_check_hfield_ids = []
         for body in geom_check_hfield_names + self.geom_feet_names:
-            self.geom_check_hfield_ids.append(
-                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, body)
-            )
-        self.geom_check_hfield_ids = jnp.array(
-            self.geom_check_hfield_ids, dtype=jnp.int32
-        )  #
+            self.geom_check_hfield_ids.append(mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, body))
+        self.geom_check_hfield_ids = jnp.array(self.geom_check_hfield_ids, dtype=jnp.int32)
         # Variables that have to be defined
-        self.action_size = len(self.actuators)  #
-        self.n_legs = 4  #
-        self.joint_qpos_adr = self.joint_qpos_adr  #
-        self.joint_qvel_adr = self.joint_qvel_adr  #
-        self.joint_limits = self.joint_limits  #
-        self.feet_coll_groups = {}  #
-        self.other_coll_groups = {}  #
+        self.action_size = len(self.actuators)
+        self.n_legs = 4
+        self.joint_qpos_adr = self.joint_qpos_adr
+        self.joint_qvel_adr = self.joint_qvel_adr
+        self.joint_limits = self.joint_limits
+        self.feet_coll_groups = {}
+        self.other_coll_groups = {}
         self.nominal_joint_positions = self.model.keyframe("home").qpos[7:]
         self.initial_qpos = jnp.array(self.model.keyframe("home").qpos)
         self.stand_down_joint_positions = jnp.array(
@@ -191,17 +194,18 @@ class GO2(BaseRobot):
                 30.1,
                 15.7,
             ]
-        )  #
+        )
 
-        self.local_angular_qvel_adr = self.local_angular_qvel_adr  #
-        self.local_linear_qvel_adr = self.local_linear_qvel_adr  #
-        self.p_gain = 20  #
-        self.d_gain = 0.5  #
-        self.nominal_trunk_z = 0.325  #
-        self.leg_distance = 0.28  #
+        self.local_angular_qvel_adr = self.local_angular_qvel_adr
+        self.local_linear_qvel_adr = self.local_linear_qvel_adr
+        self.p_gain = 20
+        self.d_gain = 0.5
+        self.nominal_trunk_z = 0.325
+        self.leg_distance = 0.28
         self.scaling_factor = 0.3
 
     def init_coll_ids(self, pipeline_state: mjx.Data):
+        """Maps the contact indices of a simulated state to foot / other geom names."""
         for i in range(pipeline_state.contact.dist.shape[0]):
             geom1 = pipeline_state.contact.geom1[i]
             geom2 = pipeline_state.contact.geom2[i]
@@ -226,6 +230,7 @@ class GO2(BaseRobot):
                     ] = i
 
     def get_pair_index(self, geom1_name, geom2_name):
+        """Index of the explicit contact pair between two named geoms in the compiled model."""
         # 1. Get the integer IDs for the two geoms
         geom1_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, geom1_name)
         geom2_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, geom2_name)
@@ -237,10 +242,9 @@ class GO2(BaseRobot):
         for i in range(self.model.npair):
             pg1 = self.model.pair_geom1[i]
             pg2 = self.model.pair_geom2[i]
-            
+
             # Check both orderings, as the compiler might swap them
             if (pg1 == geom1_id and pg2 == geom2_id) or (pg1 == geom2_id and pg2 == geom1_id):
                 return i
-                
-        raise ValueError(f"No <pair> found between '{geom1_name}' and '{geom2_name}' in the XML.")
 
+        raise ValueError(f"No <pair> found between '{geom1_name}' and '{geom2_name}' in the XML.")

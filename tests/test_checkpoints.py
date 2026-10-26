@@ -2,9 +2,9 @@
 
 Skipped when checkpoints/experiment_checkpoints_old is not present (e.g. on the cluster).
 """
+
 import jax
 import pytest
-
 from harness import CHECKPOINTS, checkpoint_available, flatten, param_signature, run_deterministic_eval
 
 pytestmark = pytest.mark.checkpoint

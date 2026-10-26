@@ -1,5 +1,10 @@
-import jax.numpy as jnp
+"""Foot and geom contact with the height field terrain.
+
+Selected by ``imports.update_lasttouch_fn``, ``get_collision_lookup_fn`` and ``get_contact_fn``.
+"""
+
 import jax
+import jax.numpy as jnp
 
 
 def get_collision(state, geom_ids: jnp.ndarray, env) -> jnp.ndarray:
@@ -11,9 +16,9 @@ def get_collision(state, geom_ids: jnp.ndarray, env) -> jnp.ndarray:
     (i.e., its z-position minus terrain height is less than its size).
 
     Args:
-        state (TerrainState | MazeState): The current environment state.
+        state (MazeState): The current environment state.
         geom_ids (jnp.ndarray): Indices of geometries to check for collision.
-        env (SimpleMazeEnv | TerrainMjxEnv): The environment instance.
+        env (SimpleMazeEnv): The environment instance.
 
     Returns:
         jnp.ndarray: Boolean array indicating collision status for each geometry.
@@ -21,9 +26,7 @@ def get_collision(state, geom_ids: jnp.ndarray, env) -> jnp.ndarray:
     pipeline_state = state.pipeline_state
     geom_pos = pipeline_state.geom_xpos[geom_ids]
     geom_size = state.model.geom_size[geom_ids, 0]
-    f_heights = env.terrain_observation.get_height_from_xpos(
-        state, geom_pos[:, :2],env
-    )
+    f_heights = env.terrain_observation.get_height_from_xpos(state, geom_pos[:, :2], env)
     return geom_pos[:, 2] - f_heights < geom_size
 
 
@@ -58,7 +61,7 @@ def get_collision_lookup(state, geom_ids: jnp.ndarray, env) -> jnp.ndarray:
     the same ordering as geom_ids: True if a contact with negative distance exists, False otherwise.
 
     Args:
-        state (TerrainState | MazeState): The current environment state.
+        state (MazeState): The current environment state.
         geom_ids (jnp.ndarray): Indices of geometries to check for contact.
         env (SimpleMazeEnv): The environment instance (unused but kept for signature parity).
 
@@ -68,6 +71,7 @@ def get_collision_lookup(state, geom_ids: jnp.ndarray, env) -> jnp.ndarray:
     contact = state.pipeline_state.contact
 
     def geom_in_contact(g):
+        # True if geom g appears in any active MJX contact
         # mask contacts involving geometry g
         mask = (contact.geom[:, 0] == g) | (contact.geom[:, 1] == g)
         # substitute large positive distance for non-matching contacts and take minimum
@@ -87,12 +91,12 @@ def update_lasttouch(state, geom_ids: jnp.ndarray, env):
     time step; otherwise, resets last_touch to zero.
 
     Args:
-        state (TerrainState | MazeState): The current environment state.
+        state (MazeState): The current environment state.
         geom_ids (jnp.ndarray): Indices of geometries to update.
-        env (SimpleMazeEnv | TerrainMjxEnv): The environment instance.
+        env (SimpleMazeEnv): The environment instance.
 
     Returns:
-        TerrainState | MazeState: Updated state with new last_touch values.
+        MazeState: Updated state with new last_touch values.
     """
     ground_array = get_collision(state, geom_ids, env)
     last_touch = state.last_touch * ~ground_array + ~ground_array * env.dt

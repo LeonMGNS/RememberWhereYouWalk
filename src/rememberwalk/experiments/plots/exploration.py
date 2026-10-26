@@ -4,16 +4,17 @@ Memory note: cell_visits is (T, envs, cells_x, cells_y). Each run is reduced to 
 single (n_envs,) array of per-env explored-percentages at load time and everything
 else is dropped.
 """
+
 import gc
 import pickle
 import textwrap
 
-import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.ticker import MultipleLocator
 
-from rememberwalk.experiments.plots.style import RC, FIGWIDTH_IN, FS_SCRIPT, png_path
+from rememberwalk.experiments.plots.style import FIGWIDTH_IN, FS_SCRIPT, RC, png_path
 
 
 def load_exploration_data(data_dir):
@@ -31,8 +32,7 @@ def load_exploration_data(data_dir):
     return episode_lengths, cell_visits
 
 
-def percent_explored(episode_lengths, cell_visits, full_episodes_only=True,
-                     label=""):
+def percent_explored(episode_lengths, cell_visits, full_episodes_only=True, label=""):
     """Reduce one run to a (n_envs,) array of percent-of-maze-explored.
 
     Counts are cumulative, so each env's total is read at its own final step
@@ -43,11 +43,11 @@ def percent_explored(episode_lengths, cell_visits, full_episodes_only=True,
     cell_visits = np.asarray(cell_visits)
     episode_lengths = np.asarray(episode_lengths)
     T, n_envs = cell_visits.shape[0], cell_visits.shape[1]
-    last = np.clip(episode_lengths, 1, T) - 1             # (n_envs,)
-    final = cell_visits[last, np.arange(n_envs)]          # (n_envs, cx, cy)
+    last = np.clip(episode_lengths, 1, T) - 1  # (n_envs,)
+    final = cell_visits[last, np.arange(n_envs)]  # (n_envs, cx, cy)
     final = final.reshape(n_envs, -1)
 
-    pct = 100.0 * np.mean(final >= 1, axis=-1)                # (n_envs,)
+    pct = 100.0 * np.mean(final >= 1, axis=-1)  # (n_envs,)
 
     if full_episodes_only:
         keep = episode_lengths == T
@@ -71,11 +71,11 @@ def plot_exploration_bars_pooled(
     figwidth_in=None,
     figheight_in=1.3,
     bar_width=0.62,
-    err="std",            # "std" | "sem" -- std shows spread; SEM shrinks with
-                          # sqrt(n) and is nearly invisible at n ~ 3000
+    err="std",  # "std" | "sem" -- std shows spread; SEM shrinks with
+    # sqrt(n) and is nearly invisible at n ~ 3000
     annotate=True,
     wrap=13,
-    min_slots=4,          # fewer bars keep the bar width of the 4-approach figure
+    min_slots=4,  # fewer bars keep the bar width of the 4-approach figure
 ):
     """One bar per approach over the POOLED envs.
 
@@ -83,41 +83,59 @@ def plot_exploration_bars_pooled(
              A list/tuple of per-run arrays is also accepted and is concatenated here.
     colors : one RGB (0-1) per approach, in the order of runs.
     """
-    runs = {k: (np.concatenate([np.asarray(a, float).ravel() for a in v])
-                if isinstance(v, (list, tuple)) else np.asarray(v, float).ravel())
-            for k, v in runs.items()}
+    runs = {
+        k: (
+            np.concatenate([np.asarray(a, float).ravel() for a in v])
+            if isinstance(v, (list, tuple))
+            else np.asarray(v, float).ravel()
+        )
+        for k, v in runs.items()
+    }
     names = list(runs.keys())
     with mpl.rc_context(RC):
-        fig, ax = plt.subplots(figsize=(figwidth_in or FIGWIDTH_IN,
-                                        figheight_in), layout="constrained")
+        fig, ax = plt.subplots(figsize=(figwidth_in or FIGWIDTH_IN, figheight_in), layout="constrained")
         fig.get_layout_engine().set(w_pad=0.01, h_pad=0.01)
 
         xs = np.arange(len(names))
         # absolute bar width of the min_slots-bar figure; the bars still spread over the full width
         bar_width = bar_width * len(names) / max(len(names), min_slots)
-        for a, (name, pct) in enumerate(runs.items()):
+        for a, pct in enumerate(runs.values()):
             pct = np.asarray(pct, float)
             mean = float(pct.mean())
             spread = float(pct.std())
             if err == "sem":
                 spread /= np.sqrt(max(pct.size, 1))
-            ax.bar(xs[a], mean, width=bar_width,
-                   color=colors[a],
-                   edgecolor="0.15", linewidth=0.6, zorder=2)
-            ax.errorbar(xs[a], mean, yerr=spread, fmt="none", ecolor="0.15",
-                        elinewidth=0.6, capsize=1.5, capthick=0.6, zorder=3)
+            ax.bar(xs[a], mean, width=bar_width, color=colors[a], edgecolor="0.15", linewidth=0.6, zorder=2)
+            ax.errorbar(
+                xs[a],
+                mean,
+                yerr=spread,
+                fmt="none",
+                ecolor="0.15",
+                elinewidth=0.6,
+                capsize=1.5,
+                capthick=0.6,
+                zorder=3,
+            )
             if annotate:
-                ax.text(xs[a], mean + spread + 1.5, f"{mean:.1f}",
-                        ha="center", va="bottom", fontsize=FS_SCRIPT, zorder=4)
+                ax.text(
+                    xs[a],
+                    mean + spread + 1.5,
+                    f"{mean:.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=FS_SCRIPT,
+                    zorder=4,
+                )
 
         ax.set_xticks(xs)
         ax.set_xticklabels([textwrap.fill(n, wrap) if len(names) >= 4 else n for n in names])
         # Long single-word labels cannot wrap: tilt all labels once two neighbours collide
         fig.canvas.draw()
         boxes = [t.get_window_extent() for t in ax.get_xticklabels()]
-        if any(b0.x1 + 2 > b1.x0 for b0, b1 in zip(boxes, boxes[1:])):
+        if any(b0.x1 + 2 > b1.x0 for b0, b1 in zip(boxes, boxes[1:], strict=False)):
             ax.set_xticklabels(names, rotation=30, ha="right", rotation_mode="anchor")
-            fig.set_size_inches(fig.get_size_inches() + [0, 0.25])   # room for the tilted labels
+            fig.set_size_inches(fig.get_size_inches() + [0, 0.25])  # room for the tilted labels
         ax.tick_params(axis="x", length=0)
         ax.set_ylim(*ylim)
         ax.yaxis.set_major_locator(MultipleLocator(25))
@@ -136,12 +154,17 @@ def plot_exploration_bars_pooled(
 
 
 def make_exploration_figure(suite, out_path, approaches=None, labels=None):
+    """Writes the explored-maze percentage bars, pooled over runs, of ``approaches`` (default: all
+    approaches of the suite) to ``out_path``.
+
+    ``labels`` are optional display names, one per approach.
+    """
     approaches = approaches or suite.approaches
     labels = labels or [a.name for a in approaches]
     # Reduce each run to (n_envs,) immediately; the big array never outlives
     # the loop iteration that loaded it.
     runs = {}
-    for approach, display in zip(approaches, labels):
+    for approach, display in zip(approaches, labels, strict=True):
         runs[display] = []
         for i in range(len(approach.runs)):
             label = f"{approach.name} run {i + 1}"
