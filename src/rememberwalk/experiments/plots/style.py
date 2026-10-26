@@ -34,6 +34,16 @@ POLICY_LINESTYLES = [
     (0, (1, 1.2)),      # dotted
 ]
 
+# Named dash patterns a suite figure can assign per approach ('linestyles:'),
+# in units of the line width
+LINESTYLES = {
+    "solid": (0, ()),
+    "dashed": (0, (5, 2)),
+    "dotted": (0, (1, 1.5)),
+    "dashdot": (0, (5, 2, 1, 2)),
+    "dashdotdot": (0, (5, 2, 1, 2, 1, 2)),
+}
+
 RC = {
     "font.family": "serif",
     # IEEE uses Times (ptm). Falls back to DejaVu Serif if Times is missing.

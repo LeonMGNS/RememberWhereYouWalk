@@ -26,6 +26,7 @@ class Approach:
     runs: list              # checkpoint paths relative to CKPT_DIR, one per seed
     config: str = None      # training config name, only for runs without a saved config.yaml
     showcase_run: int = 0   # run used for the prediction figure and the live video
+    imported: bool = False  # eval data (and live recording) copied in from elsewhere; runs are labels, not checkpoints
 
     @property
     def slug(self) -> str:
@@ -34,6 +35,25 @@ class Approach:
     @property
     def color_unit(self) -> tuple:
         return tuple(c / 255.0 for c in self.color)
+
+
+@dataclass
+class Figure:
+    kind: str               # bce | exploration | heat_maps | predictions
+    file: str               # relative to the suite output_dir
+    approaches: list        # Approach objects, in display order
+    labels: list = None     # optional short display names, one per approach (default: approach names)
+    colors: list = None     # bce only: optional RGB (0-1) per approach, overriding the approach colors
+    linestyles: list = None # bce only: optional named dash pattern per approach (plots.style.LINESTYLES)
+
+
+# Figures made when a suite file has no 'figures' section
+DEFAULT_FIGURES = {
+    "bce": "plots/bce_error.pdf",
+    "exploration": "plots/exploration.pdf",
+    "heat_maps": "plots/heat_maps.pdf",
+    "predictions": "plots/maze_predictions.pdf",
+}
 
 
 @dataclass
@@ -46,10 +66,11 @@ class Suite:
     nr_envs: int
     randomization_key: int
     approaches: list
-    figures: dict
+    figures: list           # Figure objects
     showcase_env_index: int
     showcase_timesteps: list
     video: dict = field(default_factory=dict)
+    video_approaches: list = field(default_factory=list)
 
     def data_dir(self, approach: Approach, run_index: int) -> Path:
         return self.output_dir / "data" / approach.slug / f"run_{run_index + 1}"
@@ -73,6 +94,7 @@ def load_suite(path) -> Suite:
             runs=list(entry.get("runs") or []),
             config=entry.get("config"),
             showcase_run=int(entry.get("showcase_run", 0)),
+            imported=bool(entry.get("imported", False)),
         )
         if not approach.runs:
             print(f"** Skipping approach '{approach.name}': no runs listed in {path}")
@@ -83,6 +105,52 @@ def load_suite(path) -> Suite:
     if not approaches:
         raise ValueError(f"No approach in {path} lists any runs")
 
+    by_name = {a.name: a for a in approaches}
+    listed = {entry["name"] for entry in raw["approaches"]}
+
+    def select(names, what):
+        """Approaches named in a figure or the video; all approaches if names is None."""
+        if names is None:
+            return list(approaches)
+        unknown = [n for n in names if n not in listed]
+        if unknown:
+            raise ValueError(f"{what} in {path} names unknown approaches {unknown}")
+        return [by_name[n] for n in names if n in by_name]
+
+    figures = []
+    for name, entry in (raw.get("figures") or DEFAULT_FIGURES).items():
+        if isinstance(entry, str):
+            entry = {"file": entry}
+        figure = Figure(kind=entry.get("kind", name), file=entry["file"],
+                        approaches=select(entry.get("approaches"), f"Figure '{name}'"))
+        if entry.get("labels") is not None:
+            if entry.get("approaches") is None or len(entry["labels"]) != len(entry["approaches"]):
+                raise ValueError(f"Figure '{name}' in {path}: give one label per listed approach")
+            label_of = dict(zip(entry["approaches"], entry["labels"]))
+            figure.labels = [label_of[a.name] for a in figure.approaches]
+        for option in ("colors", "linestyles"):
+            if entry.get(option) is None:
+                continue
+            if figure.kind != "bce":
+                raise ValueError(f"Figure '{name}' in {path}: '{option}' is only supported for bce figures")
+            if entry.get("approaches") is None or len(entry[option]) != len(entry["approaches"]):
+                raise ValueError(f"Figure '{name}' in {path}: give one entry of '{option}' per listed approach")
+            value_of = dict(zip(entry["approaches"], entry[option]))
+            values = [value_of[a.name] for a in figure.approaches]
+            if option == "colors":
+                values = [tuple(c / 255.0 for c in color) for color in values]
+            else:
+                from rememberwalk.experiments.plots.style import LINESTYLES
+                unknown = sorted(set(values) - set(LINESTYLES))
+                if unknown:
+                    raise ValueError(f"Figure '{name}' in {path}: unknown linestyles {unknown}, use {list(LINESTYLES)}")
+            setattr(figure, option, values)
+        if not figure.approaches:
+            print(f"** Skipping figure '{name}': none of its approaches has runs")
+            continue
+        figures.append(figure)
+
+    video = raw.get("video", {})
     showcase = raw.get("showcase", {})
     rollout = raw.get("rollout", {})
     return Suite(
@@ -94,10 +162,11 @@ def load_suite(path) -> Suite:
         nr_envs=int(rollout.get("nr_envs", 100)),
         randomization_key=int(rollout.get("randomization_key", 0)),
         approaches=approaches,
-        figures=raw.get("figures", {}),
+        figures=figures,
         showcase_env_index=int(showcase.get("env_index", 0)),
         showcase_timesteps=[int(t) for t in showcase.get("timesteps", [10, 1750, 3499])],
-        video=raw.get("video", {}),
+        video=video,
+        video_approaches=select(video.get("approaches"), "The video"),
     )
 
 
@@ -125,6 +194,8 @@ def _upgrade_legacy_keys(config):
 
 def training_config(approach: Approach, run_path: str) -> dict:
     """The training config of one run, as a plain dict."""
+    if approach.imported:
+        raise ValueError(f"'{approach.name}' is imported: its runs are data labels, not checkpoints")
     if not (CKPT_DIR / run_path).exists():
         raise FileNotFoundError(f"Checkpoint {CKPT_DIR / run_path} of '{approach.name}' does not exist")
     saved = _saved_config_path(run_path)

@@ -15,6 +15,7 @@ overrides:
   robot.config: mjx_navigation_plot # same physics as mjx_navigation, plus the maze texture for rendering
   eval.file_eval_maze_nr: only_desc_100_eval # every approach is evaluated on the same held-out mazes
   eval.nr_eval_mazes: 100
+  domain_randomization.randomization_prob: 0.0 # no dynamics randomization (model, pushes, control); observation noise stays on
 
 curriculum_level: 1.0
 terrain_curriculum_level: 1.0
@@ -28,69 +29,191 @@ showcase:
   env_index: 77
   timesteps: [ 10, 1750, 3499 ] # figure columns and video screenshots
 
-# Order here = order in every figure and in the video.
+# Every approach that has runs is rolled out; each figure and the video list the
+# approaches they show, in display order.
 #   runs:         checkpoint paths relative to checkpoints/, one per seed
 #                 (scripts/train.py prints the path of its final checkpoint)
 #   config:       training config to use for runs WITHOUT a saved config.yaml
 #   showcase_run: index into runs of the policy shown in the prediction figure and video
 #   color:        0-255 RGB, used by every figure and the video
+#   imported:     the eval data (and live recording) was copied into <output_dir> from an
+#                 earlier evaluation; runs are only labels, nothing is rolled out or re-recorded
 approaches:
 - name: "LSMM (ours)"
   color: [ 1, 115, 178 ]
   config: lsmm
   showcase_run: 1
   runs:
-  - experiment_checkpoints/LSMM/policy_1
-  - experiment_checkpoints/LSMM/policy_2
-  - experiment_checkpoints/LSMM/policy_3
+  - paper/non_sweep/run_lsmm_s0_55535157/2500036608
+  - paper/non_sweep/run_lsmm_s1_55535157/2500036608
+  - paper/non_sweep/run_lsmm_s2_55535157/2500036608
 
 - name: LSTM
   color: [ 222, 143, 5 ]
   config: lstm
   runs:
-  - experiment_checkpoints/LSTM/policy_1
-  - experiment_checkpoints/LSTM/policy_2
-  - experiment_checkpoints/LSTM/policy_3
+  - paper/non_sweep/run_lstm_s0_55535157/2500036608
+  - paper/non_sweep/run_lstm_s1_55535157/2500036608
+  - paper/non_sweep/run_lstm_s2_55535157/2500036608
 
+# The retrained FixedWindow runs are unstable; the paper uses the data of the original
+# FixedWindow policies (thesis repo, experiments/data/EvalFixedWindow_1/policy_<i>).
 - name: FixedWindow
   color: [ 2, 158, 115 ]
   config: fixed_window
+  imported: true
   runs:
-  - experiment_checkpoints/FixedWindow/policy_1
-  - experiment_checkpoints/FixedWindow/policy_2
-  - experiment_checkpoints/FixedWindow/policy_3
+  - experiment_checkpoints/FixedWindow/policy_1/finished
+  - experiment_checkpoints/FixedWindow/policy_2/finished
+  - experiment_checkpoints/FixedWindow/policy_3/finished
 
 - name: Transformer
   color: [ 213, 94, 0 ]
   config: transformer
   runs:
-  - experiment_checkpoints/Transformer/policy_1
-  - experiment_checkpoints/Transformer/policy_2
-  - experiment_checkpoints/Transformer/policy_3
+  - paper/non_sweep/run_transformer_s0_55535157/2500036608
+  - paper/non_sweep/run_transformer_s1_55535157/2500036608
+  - paper/non_sweep/run_transformer_s2_55535157/2500036608
 
-# Ablations
 - name: SRU
   color: [ 204, 120, 188 ]
   config: sru
   runs:
-  - experiment_checkpoints/SRU/policy_1
-  - experiment_checkpoints/SRU/policy_2
-  - experiment_checkpoints/SRU/policy_3
+  - paper/non_sweep/run_sru_s0_55537778/2500036608
+  - paper/non_sweep/run_sru_s1_55537778/2500036608
+  - paper/non_sweep/run_sru_s2_55537778/2500036608
 
+# LSMM ablations are drawn in the blue of LSMM, so they read as variants of it.
 - name: "LSMM (additive)"
-  color: [ 202, 145, 97 ]
+  color: [ 94, 60, 153 ] # dark purple: cool like LSMM blue, but separable from it (and from the baselines) under CVD
   config: lsmm_additive
   runs:
-  - experiment_checkpoints/LSMM_additive/policy_1
-  - experiment_checkpoints/LSMM_additive/policy_2
-  - experiment_checkpoints/LSMM_additive/policy_3
+  - paper/non_sweep/run_lsmm_additive_s0_55530507/2500036608
+  - paper/non_sweep/run_lsmm_additive_s1_55530507/2500036608
+  - paper/non_sweep/run_lsmm_additive_s2_55530507/2500036608
 
+# Memory channels of the matrix memory: one blue ramp, light (1) -> dark (10).
+# 3 channels is the LSMM default and keeps its colour.
+- name: "LSMM (1 ch.)"
+  color: [ 166, 207, 232 ]
+  config: lsmm
+  runs:
+  - paper/non_sweep/run_lsmm_c1_s0_55578839/2500036608
+  - paper/non_sweep/run_lsmm_c1_s1_55578839/2500036608
+  - paper/non_sweep/run_lsmm_c1_s2_55578839/2500036608
+
+- name: "LSMM (2 ch.)"
+  color: [ 79, 159, 212 ]
+  config: lsmm
+  runs:
+  - paper/non_sweep/run_lsmm_c2_s0_55578839/2500036608
+  - paper/non_sweep/run_lsmm_c2_s1_55578839/2500036608
+  - paper/non_sweep/run_lsmm_c2_s2_55578839/2500036608
+
+- name: "LSMM (3 ch.)"
+  color: [ 1, 115, 178 ]
+  config: lsmm
+  runs:
+  - paper/non_sweep/run_lsmm_c3_s0_55578839/2500036608
+  - paper/non_sweep/run_lsmm_c3_s1_55578839/2500036608
+  - paper/non_sweep/run_lsmm_c3_s2_55578839/2500036608
+
+- name: "LSMM (5 ch.)"
+  color: [ 11, 79, 138 ]
+  config: lsmm
+  runs:
+  - paper/non_sweep/run_lsmm_c5_s0_55578839/2500036608
+  - paper/non_sweep/run_lsmm_c5_s1_55578839/2500036608
+  - paper/non_sweep/run_lsmm_c5_s2_55578839/2500036608
+
+- name: "LSMM (10 ch.)"
+  color: [ 6, 47, 87 ]
+  config: lsmm
+  runs:
+  - paper/non_sweep/run_lsmm_c10_s0_55578839/2500036608
+  - paper/non_sweep/run_lsmm_c10_s1_55578839/2500036608
+  - paper/non_sweep/run_lsmm_c10_s2_55578839/2500036608
+
+# kind: bce | exploration | heat_maps | predictions (defaults to the key)
 figures:
-  bce: plots/bce_error.pdf
-  exploration: plots/exploration.pdf
-  heat_maps: plots/heat_maps.pdf
-  predictions: plots/maze_predictions.pdf
+  bce:
+    file: plots/bce_error.pdf
+    approaches: [ "LSMM (ours)", LSTM, FixedWindow, Transformer ]
+  # All baselines plus the additive LSMM ablation in one figure
+  bce_with_additive:
+    kind: bce
+    file: plots/bce_error_with_additive.pdf
+    approaches: [ "LSMM (ours)", "LSMM (additive)", LSTM, SRU, FixedWindow, Transformer ]
+  bce_with_sru:
+    kind: bce
+    file: plots/bce_error_with_sru.pdf
+    approaches: [ "LSMM (ours)", LSTM, SRU, FixedWindow, Transformer ]
+  bce_recurrent:
+    kind: bce
+    file: plots/bce_error_recurrent.pdf
+    approaches: [ "LSMM (ours)", LSTM, SRU ]
+  bce_ablation_channels:
+    kind: bce
+    file: plots/bce_error_ablation_channels.pdf
+    approaches: [ "LSMM (1 ch.)", "LSMM (2 ch.)", "LSMM (3 ch.)", "LSMM (5 ch.)", "LSMM (10 ch.)" ]
+  # Same data, one LSMM blue for all and the channel count told apart by dash pattern
+  # (solid = 3 ch., the default config)
+  bce_ablation_channels_dashed:
+    kind: bce
+    file: plots/bce_error_ablation_channels_dashed.pdf
+    approaches: [ "LSMM (1 ch.)", "LSMM (2 ch.)", "LSMM (3 ch.)", "LSMM (5 ch.)", "LSMM (10 ch.)" ]
+    colors: [ [ 1, 115, 178 ], [ 1, 115, 178 ], [ 1, 115, 178 ], [ 1, 115, 178 ], [ 1, 115, 178 ] ]
+    linestyles: [ dotted, dashdotdot, solid, dashed, dashdot ]
+  bce_ablation_additive:
+    kind: bce
+    file: plots/bce_error_ablation_additive.pdf
+    approaches: [ "LSMM (ours)", "LSMM (additive)" ]
+  exploration:
+    file: plots/exploration.pdf
+    approaches: [ "LSMM (ours)", LSTM, FixedWindow, Transformer ]
+  heat_maps:
+    file: plots/heat_maps.pdf
+    approaches: [ "LSMM (ours)", LSTM, FixedWindow, Transformer ]
+  exploration_with_sru:
+    kind: exploration
+    file: plots/exploration_with_sru.pdf
+    approaches: [ "LSMM (ours)", LSTM, SRU, FixedWindow, Transformer ]
+  heat_maps_with_sru:
+    kind: heat_maps
+    file: plots/heat_maps_with_sru.pdf
+    approaches: [ "LSMM (ours)", LSTM, SRU, FixedWindow, Transformer ]
+  # Exploration of the ablations; labels are short panel/bar names
+  exploration_recurrent:
+    kind: exploration
+    file: plots/exploration_recurrent.pdf
+    approaches: [ "LSMM (ours)", LSTM, SRU ]
+  heat_maps_recurrent:
+    kind: heat_maps
+    file: plots/heat_maps_recurrent.pdf
+    approaches: [ "LSMM (ours)", LSTM, SRU ]
+  exploration_ablation_channels:
+    kind: exploration
+    file: plots/exploration_ablation_channels.pdf
+    approaches: [ "LSMM (1 ch.)", "LSMM (2 ch.)", "LSMM (3 ch.)", "LSMM (5 ch.)", "LSMM (10 ch.)" ]
+    labels: [ "1 ch.", "2 ch.", "3 ch.", "5 ch.", "10 ch." ]
+  heat_maps_ablation_channels:
+    kind: heat_maps
+    file: plots/heat_maps_ablation_channels.pdf
+    approaches: [ "LSMM (1 ch.)", "LSMM (2 ch.)", "LSMM (3 ch.)", "LSMM (5 ch.)", "LSMM (10 ch.)" ]
+    labels: [ "1 ch.", "2 ch.", "3 ch.", "5 ch.", "10 ch." ]
+  exploration_ablation_additive:
+    kind: exploration
+    file: plots/exploration_ablation_additive.pdf
+    approaches: [ "LSMM (ours)", "LSMM (additive)" ]
+  heat_maps_ablation_additive:
+    kind: heat_maps
+    file: plots/heat_maps_ablation_additive.pdf
+    approaches: [ "LSMM (ours)", "LSMM (additive)" ]
+  predictions:
+    file: plots/maze_predictions.pdf
+    approaches: [ "LSMM (ours)", LSTM, FixedWindow, Transformer ]
 
 video:
   file: videos/maze_predictions_live.mp4
   frame_stride: 1
+  approaches: [ "LSMM (ours)", LSTM, FixedWindow, Transformer ]

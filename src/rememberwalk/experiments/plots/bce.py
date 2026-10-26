@@ -9,7 +9,7 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator, MultipleLocator, FuncFormatter
 from matplotlib.transforms import Bbox
 
-from rememberwalk.experiments.plots.style import RC, FIGWIDTH_IN, FS_FOOTNOTE, CONTROL_DT, png_path
+from rememberwalk.experiments.plots.style import RC, FIGWIDTH_IN, FS_FOOTNOTE, CONTROL_DT, LINESTYLES, png_path
 
 
 def _thousands(x, _pos):
@@ -62,6 +62,7 @@ def plot_bce_pooled(
     runs,
     out_path,
     colors,
+    linestyles=None,
     steps=None,
     ylim=None,
     band="std",          # "std" | "sem" | "iqr"
@@ -78,12 +79,15 @@ def plot_bce_pooled(
              and environments jointly. A list/tuple of per-run (T, n_i) arrays is
              also accepted and concatenated here.
     colors : one RGB (0-1) per approach, in the order of runs.
+    linestyles : optional dash pattern per approach (default: all solid).
     """
     runs = {k: (np.concatenate([np.atleast_2d(np.asarray(a, float))
                                 for a in v], axis=1)
                 if isinstance(v, (list, tuple)) else np.asarray(v, float))
             for k, v in runs.items()}
 
+    # Dash patterns need a thinner stroke to stay readable where curves overlap
+    linewidth = 1.3 if linestyles else 1.75
     lo_seen, hi_seen = [], []
     with mpl.rc_context(RC):
         fig, ax = plt.subplots(figsize=(figwidth_in or FIGWIDTH_IN,
@@ -118,7 +122,8 @@ def plot_bce_pooled(
             color = colors[k]
             ax.fill_between(x, lo, hi, color=color, alpha=band_alpha,
                             linewidth=0)
-            ax.plot(x, mean, color=color, label=name,linewidth=1.75)
+            ax.plot(x, mean, color=color, label=name, linewidth=linewidth,
+                    linestyle=linestyles[k] if linestyles else "-")
             lo_seen.append(float(np.nanmin(lo)))
             hi_seen.append(float(np.nanmax(hi)))
 
@@ -144,13 +149,15 @@ def plot_bce_pooled(
         # the swatches leaves the plotted curves untouched.
         handles = [
             Line2D([], [], color=colors[k],
-                   linewidth=1.75, solid_capstyle="butt")
+                   linewidth=linewidth, solid_capstyle="butt",
+                   linestyle=linestyles[k] if linestyles else "-")
             for k in range(len(runs))
         ]
         fig.legend(handles, list(runs.keys()),
                    loc="outside lower center", ncol=2,
                    fontsize=8, frameon=False,
-                   columnspacing=1.6, handlelength=1.6,
+                   columnspacing=1.6,
+                   handlelength=3.0 if linestyles else 1.6,   # long enough to show a full dash period
                    handletextpad=0.5, labelspacing=0.35)
 
         # --- centre the axes box on a fixed-width page --------------------
@@ -174,11 +181,13 @@ def plot_bce_pooled(
     return out_path
 
 
-def make_bce_figure(suite, out_path):
+def make_bce_figure(suite, out_path, approaches=None, labels=None, colors=None, linestyles=None):
+    approaches = approaches or suite.approaches
+    labels = labels or [a.name for a in approaches]
     # One run at a time: only the filtered (T, n_kept) arrays stay alive.
     runs = {}
-    for approach in suite.approaches:
-        runs[approach.name] = [
+    for approach, label in zip(approaches, labels):
+        runs[label] = [
             full_episode_only(*load_bce_data(suite.data_dir(approach, i)), label=f"{approach.name} run {i + 1}")
             for i in range(len(approach.runs))
         ]
@@ -193,7 +202,10 @@ def make_bce_figure(suite, out_path):
     plot_bce_pooled(
         runs,
         out_path,
-        colors=[a.color_unit for a in suite.approaches],
+        colors=colors or [a.color_unit for a in approaches],
+        linestyles=[LINESTYLES[s] for s in linestyles] if linestyles else None,
+        # many overlapping bands would merge into one blob, even more so in a single colour
+        band_alpha=0.16 if len(runs) <= 4 else (0.035 if linestyles else 0.07),
         figheight_in=1.7 + 0.17 * max(legend_rows - 2, 0),
         steps=np.arange(T),
         ylim=None,      # set e.g. (0.10, 0.45) to pin it across figures

@@ -44,24 +44,35 @@ def main():
         from rememberwalk.experiments.plots.bce import make_bce_figure
         from rememberwalk.experiments.plots.exploration import make_exploration_figure
         from rememberwalk.experiments.plots.heat_maps import make_heat_map_figure
-        make_bce_figure(suite, output(suite.figures.get("bce", "plots/bce_error.pdf")))
-        make_exploration_figure(suite, output(suite.figures.get("exploration", "plots/exploration.pdf")))
-        make_heat_map_figure(suite, output(suite.figures.get("heat_maps", "plots/heat_maps.pdf")))
+        makers = {"bce": make_bce_figure, "exploration": make_exploration_figure, "heat_maps": make_heat_map_figure}
+        for figure in suite.figures:
+            if figure.kind in makers:
+                print(f"=== Figure {figure.file}: {', '.join(a.name for a in figure.approaches)}")
+                style = {k: v for k, v in (("colors", figure.colors), ("linestyles", figure.linestyles)) if v is not None}
+                makers[figure.kind](suite, output(figure.file), approaches=figure.approaches, labels=figure.labels, **style)
 
     if "render" in args.stages:
         from rememberwalk.experiments.prediction_figure import make_prediction_figure
-        make_prediction_figure(suite, output(suite.figures.get("predictions", "plots/maze_predictions.pdf")))
+        for figure in suite.figures:
+            if figure.kind == "predictions":
+                make_prediction_figure(suite, output(figure.file), approaches=figure.approaches)
 
     if "video" in args.stages:
         from rememberwalk.experiments.live_video import record_live, assemble_video
         recordings = []
-        for approach in suite.approaches:
-            print(f"=== Live recording: {approach.name}")
+        for approach in suite.video_approaches:
             out_dir = suite.output_path(f"videos/{approach.slug}")
-            record_live(suite, approach, out_dir)
+            if approach.imported:
+                # No checkpoint to re-simulate: use the recording that was imported with the data
+                if not (out_dir / "panel.mp4").is_file():
+                    print(f"** Skipping '{approach.name}' in the video: imported without a recording in {out_dir}")
+                    continue
+                print(f"=== Live recording: {approach.name} (imported, {out_dir})")
+            else:
+                print(f"=== Live recording: {approach.name}")
+                record_live(suite, approach, out_dir)
             recordings.append(out_dir)
         assemble_video(recordings, output(suite.video.get("file", "videos/maze_predictions_live.mp4")))
-
 
 if __name__ == "__main__":
     main()
