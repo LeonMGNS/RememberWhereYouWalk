@@ -6,6 +6,15 @@ from jax.scipy.spatial.transform import Rotation
 
 
 def get_obs(state: MazeState, env:SimpleMazeEnv, key: jnp.ndarray) -> tuple[MazeState, jnp.ndarray]:
+    return compute_obs(state, env, key, hold_every_2nd_step=False)
+
+
+def compute_obs(state: MazeState, env:SimpleMazeEnv, key: jnp.ndarray, hold_every_2nd_step: bool) -> tuple[MazeState, jnp.ndarray]:
+    """Actor/critic observations, height maps and the noisy position of one env.
+
+    ``hold_every_2nd_step`` (small deployment maze) refreshes the height map and the position only on even
+    steps and keeps the previous ones otherwise.
+    """
     # Get proprioceptive observations + command
     pipeline_state = state.pipeline_state
     _, euler_angles, quat_inv = update_orientation(pipeline_state)
@@ -72,10 +81,16 @@ def get_obs(state: MazeState, env:SimpleMazeEnv, key: jnp.ndarray) -> tuple[Maze
         chosen_height,
         hf_obs,
     )
+    if hold_every_2nd_step:
+        # Extra split of the deployment variant, kept so its RNG stream stays the same
+        _,key = jax.random.split(key)
     yaw = (euler_angles[2]).reshape((1,))
     xy = (state.pipeline_state.qpos[:2]).reshape((2,))
     noisy_true_pos = jnp.concat([xy,yaw]) + jax.random.uniform(key,(3,),minval=-env.dr_parameters["observation_parameters"]["true_pos_noise"],maxval=env.dr_parameters["observation_parameters"]["true_pos_noise"])
     _, key = jax.random.split(key)
+    if hold_every_2nd_step:
+        hf_obs = jnp.where(((state.n_steps % 2) == 0) *jnp.ones_like(hf_obs),hf_obs,state.height_obs)
+        noisy_true_pos = jnp.where(((state.n_steps % 2) == 0)*jnp.ones_like(noisy_true_pos),noisy_true_pos,state.noisy_true_pos)
 
     state = state.replace(
         obs=obs,

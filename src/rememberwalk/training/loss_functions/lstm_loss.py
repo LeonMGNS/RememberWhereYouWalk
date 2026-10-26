@@ -1,9 +1,10 @@
 import jax.numpy as jnp
 from rememberwalk.actor_critic.LSTM import Params, Transition
 from rememberwalk.training.ppo import PPOTrainer
+from rememberwalk.training.bce import compute_bce_loss
+from rememberwalk.training.loss_functions.common import compute_gae, interpolate_entropy_cost
 import jax
 from typing import Tuple
-import optax
 
 
 def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, training_steps: jnp.ndarray, key: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -62,18 +63,7 @@ def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, tr
     next_value = jax.lax.stop_gradient(jnp.concatenate([baseline[1:], jnp.expand_dims(bootstrap_value, 0)], axis=0))
 
     # Compute GAE
-    termination = dones * (1 - truncations)
-    truncation_mask = 1 - truncations
-    deltas = rewards + discount_factor * next_value * (1 - termination) - baseline
-    # After a timeout the env has already reset, so next_value belongs to the next episode
-    deltas *= truncation_mask
-    acc = jnp.zeros_like(deltas[0])
-    def compute_gae(carry, target):
-        lambda_, acc = carry
-        truncation_mask, delta, termination = target
-        acc = delta + discount_factor * (1 - termination) * truncation_mask * lambda_ * acc
-        return (lambda_, acc), (acc)
-    _, accs = jax.lax.scan(compute_gae, (ppo_trainer.gae_lambda, acc), (truncation_mask, deltas, termination), length=int(termination.shape[0]), reverse=True)
+    accs = compute_gae(rewards, baseline, next_value, dones, truncations, discount_factor, ppo_trainer.gae_lambda)
 
     #Compute advantages
     advantages = jax.lax.stop_gradient(accs)
@@ -127,15 +117,3 @@ def loss_fn(ppo_trainer: PPOTrainer, params: Params, transitions: Transition, tr
         "linear_velocity_error_log": linear_velocity_error_log,
     }
     return total_loss, (losses, key)
-
-
-def compute_bce_loss(predicted_distribution: jnp.ndarray, true_distribution: jnp.ndarray):
-    loss = optax.losses.sigmoid_binary_cross_entropy(predicted_distribution, true_distribution)
-    loss = jnp.mean(loss, axis=-1)
-    return loss
-
-
-def interpolate_entropy_cost(min_entropy_cost, max_entropy_cost, training_steps, max_training_steps=6_000_000_000.0):
-    interpolation_parameter = jnp.clip(training_steps / max_training_steps, 0, 1)
-    entropy_cost = max_entropy_cost - interpolation_parameter * (max_entropy_cost - min_entropy_cost)
-    return entropy_cost

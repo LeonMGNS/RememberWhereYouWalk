@@ -2,9 +2,9 @@ import jax.numpy as jnp
 from rememberwalk.actor_critic.Transformer import Transition, TrainingState
 from rememberwalk.states.MazeState import MazeState
 from rememberwalk.training.ppo import PPOTrainer
+from rememberwalk.training.bce import compute_bce_reward
 from rememberwalk.training.collect_trajectories_functions.linear_velocity_target import linear_velocity_target
 import jax
-import optax
 
 
 def collect_trajectories(ppo_trainer: PPOTrainer, env_state: MazeState , training_state: TrainingState, key):
@@ -41,7 +41,7 @@ def collect_trajectories(ppo_trainer: PPOTrainer, env_state: MazeState , trainin
         env_state = env_state.replace(observation_history=new_obs_history)
         
         #Compute Wall prediction reward
-        auxiliary_reward = old_state.no_goal_position * compute_bce_reward(ppo_trainer,predicted_distribution,old_state.maze_description)
+        auxiliary_reward = old_state.no_goal_position * compute_bce_reward(predicted_distribution,old_state.maze_description,ppo_trainer.environment)
 
         #Logging
         summed_reward = jnp.where(env_state.done, env_state.summed_reward, 0.0)
@@ -79,20 +79,3 @@ def collect_trajectories(ppo_trainer: PPOTrainer, env_state: MazeState , trainin
     transitions, training_metrics, summed_reward, episode_length = output
     key, new_key = jax.random.split(key)
     return env_state, training_state, new_key, transitions, training_metrics, summed_reward, episode_length
-
-
-
-def compute_bce_reward(ppo_trainer, predicted_distribution, true_distribution):
-    loss = compute_bce_loss(predicted_distribution, true_distribution)
-    
-    bce_reward = (
-        ppo_trainer.environment.dt
-        * ppo_trainer.environment.parameters["reward_parameters"]["bce_reward"]
-        * jnp.clip(0.30 - loss, 0.0, 0.30) / 0.30  # normalize to [0, 1]
-    )
-    return bce_reward
-
-def compute_bce_loss(predicted_distribution: jnp.ndarray,true_distribution:jnp.ndarray):
-    loss = optax.losses.sigmoid_binary_cross_entropy(predicted_distribution,true_distribution)
-    loss = jnp.mean(loss,axis=-1)
-    return loss

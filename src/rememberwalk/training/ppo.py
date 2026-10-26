@@ -1,9 +1,9 @@
 
 import jax
 import jax.numpy as jnp
-from rememberwalk.env.BaseMJXEnv import BaseMJXEnv
+from rememberwalk.env.SimpleMazeEnv import SimpleMazeEnv
 import optax
-from rememberwalk.utils.script_utils import dir_path
+from rememberwalk.utils.paths import ROOT_DIR
 import wandb
 from copy import deepcopy
 import orbax.checkpoint as ocp
@@ -15,7 +15,7 @@ class PPOTrainer:
 
     def __init__(
             self,
-            environment: BaseMJXEnv,
+            environment: SimpleMazeEnv,
             training_config:dict,
             ckpt_dir:str,
             run:str,
@@ -66,7 +66,7 @@ class PPOTrainer:
         options = ocp.CheckpointManagerOptions(max_to_keep=2, create=True)
         self.checkpointer = ocp.Checkpointer(ocp.PyTreeCheckpointHandler())
         self.ckpt_dir, self.run = ckpt_dir,run
-        self.logging_dir = f"{dir_path}/logs/{self.run}"
+        self.logging_dir = f"{ROOT_DIR}/logs/{self.run}"
         self.checkpoint_manager = ocp.CheckpointManager(
             self.ckpt_dir, self.checkpointer, options)
         

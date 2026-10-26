@@ -1,5 +1,6 @@
 
-from rememberwalk.utils.script_utils import get_dir_and_run_for_checkpointing,filter_nested,EmptyLogger
+from rememberwalk.utils.checkpointing import get_dir_and_run_for_checkpointing
+from rememberwalk.utils.wandb_logging import filter_nested, EmptyLogger
 from rememberwalk.utils.generate_setup import generate_setup
 from rememberwalk.utils.paths import CKPT_DIR
 from pathlib import Path

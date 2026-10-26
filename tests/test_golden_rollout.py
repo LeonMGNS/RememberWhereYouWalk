@@ -7,7 +7,7 @@ collection, the loss function and the optimizer.
 import numpy as np
 import pytest
 
-from harness import CONFIGS, run_deterministic_eval, run_training_epoch
+from harness import CONFIGS, run_deterministic_eval, run_experiment_eval, run_training_epoch
 
 pytestmark = pytest.mark.slow
 
@@ -25,6 +25,13 @@ def test_rollout_is_repeatable(build_cache):
 def test_deterministic_eval(name, build_cache, golden):
     _, _, trainer = build_cache(name)
     golden(f"eval/{name}.npz", run_deterministic_eval(trainer, trainer.initial_training_state.params))
+
+
+@pytest.mark.parametrize("name", CONFIGS)
+def test_experiment_eval(name, build_cache, golden):
+    """The experiment_callback rollout that writes the paper's eval_data.pkl."""
+    setup, _, trainer = build_cache(name)
+    golden(f"experiment_eval/{name}.npz", run_experiment_eval(setup, trainer, trainer.initial_training_state.params))
 
 
 @pytest.mark.parametrize("name", CONFIGS)

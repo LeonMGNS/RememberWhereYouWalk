@@ -4,7 +4,11 @@ from rememberwalk.env.SimpleMazeEnv import SimpleMazeEnv
 from jax.scipy.spatial.transform import Rotation
 
 class MazeReward:
-       
+    # Maze geometry of the training mazes; MazeSmallDeploymentRewardFunction overrides them for the 5x5 deployment maze
+    CLOSE_TO_WALL_DISTANCE = 0.35   # (m) wall points closer than this are penalised
+    CLOSE_TO_WALL_OFFSET = 0.15     # (m) distance at which the penalty is exp(0) = 1
+    HALF_CELL_WIDTH = 1.0           # (m) normalises the centering penalty
+
     def __init__(self,reward_parameters,robot,dt=0.02):
             self.dt = dt
             self.robot = robot
@@ -219,7 +223,7 @@ class MazeReward:
         height_field_xpos_heights = env.terrain_observation.get_height_from_xpos(state,height_field_xpos_positions,env)
         height_field_xpos_positions = jnp.where((height_field_xpos_heights<0.05)[:,None],1000*jnp.ones_like(height_field_xpos_positions),height_field_xpos_positions)
         min_height_field_xpos_distance = jnp.min(jnp.linalg.norm(height_field_xpos_positions-state.pipeline_state.qpos[:2],axis=-1))
-        close_to_wall_reward = -1 * self.close_to_wall_reward * (min_height_field_xpos_distance<0.35) * jnp.exp(-5*(min_height_field_xpos_distance-0.15))    
+        close_to_wall_reward = -1 * self.close_to_wall_reward * (min_height_field_xpos_distance<self.CLOSE_TO_WALL_DISTANCE) * jnp.exp(-5*(min_height_field_xpos_distance-self.CLOSE_TO_WALL_OFFSET))    
 
         # Bias Cell reward
         neighbor_positions = env.terrain_generator.cell_center_positions
@@ -259,7 +263,7 @@ class MazeReward:
         dir_vecs = jnp.stack([col_axis, row_axis, -col_axis, -row_axis], axis=0)  # (4, 2)
 
         proj = dir_vecs @ delta                                        # signed deviation toward each neighbor
-        half = 1.0                                                   # half cell width (m)
+        half = self.HALF_CELL_WIDTH
         toward_wall = walls * jnp.square(jnp.maximum(proj, 0.0) / half)  # only penalize toward blocked sides
         centering_penalty = -1 * self.centering_coeff * jnp.sum(toward_wall)
 

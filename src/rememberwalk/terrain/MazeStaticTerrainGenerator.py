@@ -14,7 +14,7 @@ class MazeStaticGenerator:
         self.terrain_parameters = terrain_parameters
         self.one_meter_in_height_field = int(1 / terrain_parameters["height_field_resolution"])
         self.height_field_resolution = terrain_parameters["height_field_resolution"]
-        self.wall_thickness= terrain_parameters["wall_thickness"]
+        self.read_variant_parameters(terrain_parameters)
         self.zero_indices = jnp.array([self.terrain_parameters["local_height_field_x_length_in_meters"]*self.one_meter_in_height_field / 2, self.terrain_parameters["local_height_field_y_length_in_meters"]*self.one_meter_in_height_field / 2])
         self.local_hf_field_half_length=jnp.array([self.terrain_parameters["local_height_field_x_length_in_meters"]*self.one_meter_in_height_field,self.terrain_parameters["local_height_field_y_length_in_meters"]*self.one_meter_in_height_field])/2
         self.global_hfield_zero_indices = jnp.array([self.terrain_parameters["height_field_x_length_in_meters"]*self.one_meter_in_height_field/2,self.terrain_parameters["height_field_y_length_in_meters"]*self.one_meter_in_height_field/2])
@@ -22,7 +22,6 @@ class MazeStaticGenerator:
         self.slice_sizes = (self.slice_sizes[0],self.slice_sizes[1])
         self.space_per_maze_cell = self.terrain_parameters["space_maze_cell"]
         self.terrain_curr_coeff_window_size = self.terrain_parameters["terrain_curr_coeff_window_size"]
-        self.start_pos_noise = self.terrain_parameters["start_pos_noise"]
         self.maze_creator = Maze(self.terrain_parameters,save_to_file=False)
         if not eval_mode:
             if from_file:
@@ -36,7 +35,8 @@ class MazeStaticGenerator:
                     self.hfield,self.start_fields,maze_descriptions = jnp.array(maze_dict["global_hfield"]), jnp.array(maze_dict["global_start_fields"]), jnp.array(maze_dict["maze_descriptions"])
                     self.valid_start_fields = jnp.argwhere(self.start_fields)
             else:
-                self.hfield,self.start_fields,maze_descriptions = self.maze_creator.generate_terrain()
+                # B10: generating mazes on the fly was never ported (Maze has no generate_terrain); every config loads them
+                raise NotImplementedError("Set terrain.use_file_maze: true; mazes are generated offline (terrain/maze_generation)")
             self.nr_mazes = terrain_parameters["nr_mazes"]
         else:
             maze_path = f"{MAZE_DIR}/maze_{terrain_parameters["eval_maze_file"]}.pkl"
@@ -97,12 +97,13 @@ class MazeStaticGenerator:
         maze_edge_curriculum = maze_edge_curriculum.at[-1,:,1].set(True)
         maze_edge_curriculum = maze_edge_curriculum.at[:,0,0].set(True)
         maze_edge_curriculum = maze_edge_curriculum.at[:,-1,0].set(True)
+        maze_edge_curriculum = self.open_start_cell(maze_edge_curriculum)
         
         maze_description = jax.lax.dynamic_slice(self.maze_descriptions,(maze_nr,0,0,0),(1,self.R+1,self.C+1,2)).squeeze()
         
         maze_description = jnp.where(maze_edge_curriculum,maze_description,jnp.zeros_like(maze_description))
         maze_description = jnp.clip(maze_description,0.005,0.995)
-        new_hfield = self.generate_maze_walls(maze_description)
+        new_hfield, key = self.build_walls(maze_description, key)
 
         new_hfield = new_hfield + (state.curr_coeff * jax.random.uniform(key,new_hfield.shape,minval=-self.terrain_parameters["terrain_roughness"],maxval=self.terrain_parameters["terrain_roughness"])/self.terrain_parameters["max_possible_height"])  
         
@@ -111,6 +112,23 @@ class MazeStaticGenerator:
         return state,closest_idxs + self.zero_indices,key
     
     
+    # ---- Variant hooks (overridden by SmallMazeTerrainGenerator) --------------------------------------
+    def read_variant_parameters(self, terrain_parameters: dict):
+        self.wall_thickness= terrain_parameters["wall_thickness"]
+        self.start_pos_noise = terrain_parameters["start_pos_noise"]
+
+    def open_start_cell(self, maze_edge_curriculum):
+        """Walls the curriculum keeps; the training mazes leave the start cell as sampled."""
+        return maze_edge_curriculum
+
+    def build_walls(self, maze_description, key):
+        """Height field of the maze walls; returns (hfield, key)."""
+        return self.generate_maze_walls(maze_description), key
+
+    def start_position(self, key):
+        """Robot start (x, y) around the world origin."""
+        return jnp.array([0.01,0.0]) + jax.random.uniform(key,(2,),minval=-self.start_pos_noise, maxval=self.start_pos_noise)
+
     def generate_maze_walls(self,maze_description):
         
         new_maze = jnp.zeros((self.maze_shape[0],self.maze_shape[1]),dtype=jnp.float32)
@@ -178,7 +196,7 @@ class MazeStaticGenerator:
         """
         maze_nr = jax.random.randint(key,shape=(),minval=0,maxval=self.nr_mazes)
         key,_ = jax.random.split(key)
-        start_pos = jnp.array([0.01,0.0]) + jax.random.uniform(key,(2,),minval=-self.start_pos_noise, maxval=self.start_pos_noise)
+        start_pos = self.start_position(key)
         key,_ = jax.random.split(key)
         qpos = state.pipeline_state.qpos.at[:2].set(start_pos)
         _,euler_angles,_ = self.update_orientation(qpos)

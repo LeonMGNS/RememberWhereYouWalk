@@ -20,12 +20,13 @@ GOLDEN_DIR = Path(__file__).parent / "golden"
 # Every training config of the paper; lsmm_deployment covers the small-maze variants
 CONFIGS = ["lsmm", "lsmm_additive", "lsmm_deployment", "lstm", "sru", "transformer", "fixed_window"]
 
-# Trained checkpoints of the paper (configs/experiments/paper.yaml) and their training config
+# Original (thesis) paper checkpoints the goldens were recorded with, and their training config.
+# experiment_checkpoints/ now holds the retrained runs, which have different weights.
 CHECKPOINTS = {
-    "LSMM": ("lsmm", "experiment_checkpoints/LSMM/policy_1"),
-    "LSTM": ("lstm", "experiment_checkpoints/LSTM/policy_1"),
-    "FixedWindow": ("fixed_window", "experiment_checkpoints/FixedWindow/policy_1"),
-    "Transformer": ("transformer", "experiment_checkpoints/Transformer/policy_1"),
+    "LSMM": ("lsmm", "experiment_checkpoints_old/LSMM/policy_1"),
+    "LSTM": ("lstm", "experiment_checkpoints_old/LSTM/policy_1"),
+    "FixedWindow": ("fixed_window", "experiment_checkpoints_old/FixedWindow/policy_1"),
+    "Transformer": ("transformer", "experiment_checkpoints_old/Transformer/policy_1"),
 }
 
 # Shrunken workload: the tests run on CPU, where compile time dominates
@@ -87,6 +88,26 @@ def run_deterministic_eval(trainer, params) -> dict:
     out = {f"metrics/{k}": v for k, v in metrics.items()}
     out["episode_lengths"] = episode_lengths
     out["summed_rewards"] = summed_rewards
+    return to_numpy(out)
+
+
+def run_experiment_eval(setup, trainer, params) -> dict:
+    """Deterministic rollout through the experiment_callback, as experiments/data_creation.py runs it."""
+    from rememberwalk.experiments.data_creation import evaluation_fn
+    from rememberwalk.experiments.rollout import build_eval_dict
+
+    key = jax.random.PRNGKey(SEED)
+    reset_keys = jax.random.split(key, trainer.nr_eval_envs)
+    key, _ = jax.random.split(key)
+    state = jax.vmap(trainer.jitted_reset_function, (None, None, 0))(CURR_COEFF, TERRAIN_CURR_COEFF, reset_keys)
+    eval_dict = build_eval_dict(setup["training"], state, trainer.nr_eval_envs, trainer.actor_critic.action_size)
+    eval_dict["parameters"] = params
+    environment = trainer.environment
+    eval_dict, metrics, _ = evaluation_fn(eval_dict, key, environment, trainer.actor_critic, environment.step,
+                                          setup["training"]["experiment_callback"])
+    out = {f"metrics/{k}": v for k, v in metrics.items()}
+    out["episode_lengths"] = eval_dict["episode_lengths"]
+    out["summed_rewards"] = eval_dict["summed_rewards"]
     return to_numpy(out)
 
 

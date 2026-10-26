@@ -1,4 +1,5 @@
-from rememberwalk.utils.script_utils import dir_path,extract_and_save_actor,restore_ckpt
+from rememberwalk.utils.paths import ROOT_DIR
+from rememberwalk.utils.checkpointing import extract_and_save_actor, restore_ckpt
 from rememberwalk.utils.paths import CKPT_DIR
 from omegaconf import DictConfig, OmegaConf
 import hydra
@@ -28,7 +29,7 @@ def main(cfg: DictConfig):
     ckpt_dir = str(CKPT_DIR)
     if visualizer_setup["deployment_name"] is None:
         raise ValueError("Set the output name with +visualizer.deployment_name=<name>")
-    deployment_dir = f"{dir_path}/deployment_checkpoints/{visualizer_setup["deployment_name"]}"
+    deployment_dir = f"{ROOT_DIR}/deployment_checkpoints/{visualizer_setup["deployment_name"]}"
     params = restore_ckpt(ckpt_dir,None,visualizer_setup)
     extract_and_save_actor(params,deployment_dir)
 

@@ -11,7 +11,7 @@ import jax.numpy as jnp
 from rememberwalk.terrain.MazeStaticTerrainGenerator import MazeStaticGenerator
 from rememberwalk.utils.generate_setup import generate_setup
 from rememberwalk.utils.paths import CKPT_DIR
-from rememberwalk.utils.script_utils import restore_ckpt
+from rememberwalk.utils.checkpointing import restore_ckpt
 
 
 def build_environment(config: dict):

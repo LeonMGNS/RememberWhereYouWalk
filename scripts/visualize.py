@@ -9,7 +9,9 @@ import time
 import mujoco
 from rememberwalk.utils.Viewer import Viewer
 from rememberwalk.utils.paths import CKPT_DIR
-from rememberwalk.utils.script_utils import dir_path, generate_unique_path,restore_ckpt,render
+from rememberwalk.utils.paths import ROOT_DIR
+from rememberwalk.utils.checkpointing import restore_ckpt
+from rememberwalk.utils.rendering import generate_unique_path, render
 from flax.training import orbax_utils
 from flax import serialization
 from rememberwalk.actor_critic.Transformer import TrainingState as TrainingStateTransformer
@@ -111,7 +113,7 @@ class Visualizer:
         print("After simulation loop")
         print(len(images))
         self.renderer.close()
-        output_path = generate_unique_path(dir_path,self.visualizer_config["policy"])
+        output_path = generate_unique_path(str(ROOT_DIR),self.visualizer_config["policy"])
         height, width, layers = images[0].shape
         out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
         for i in range(len(images)):

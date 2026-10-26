@@ -1,11 +1,14 @@
+import jax
 import jax.numpy as jnp
-from rememberwalk.env.BaseMJXEnv import BaseMJXEnv
+from mujoco import mjx
 from rememberwalk.states.MazeState import MazeState
 
-class SimpleMazeEnv(BaseMJXEnv):
+class SimpleMazeEnv:
 
     def __init__(self, parameters: dict):
-        super().__init__(parameters)
+        self.robot = parameters["robot"]
+        self.model = self.robot.model
+        self.physics_steps_per_env_step = parameters["physics_steps_per_env_step"]
         # Defining environment variables from parameter dict
         self.parameters = parameters
         self.dr_parameters = parameters["dr_parameters"]
@@ -88,7 +91,7 @@ class SimpleMazeEnv(BaseMJXEnv):
                                             state.extrinsic_position_offset,
                                             )
         # Apply the control to the environment
-        state = super().step(state, ctrl)
+        state = self.physics_step(state, ctrl)
         
         #Update n_steps
         state = state.replace(n_steps=state.n_steps+1)
@@ -117,3 +120,44 @@ class SimpleMazeEnv(BaseMJXEnv):
         state, key = self.get_obs(state, self, key)
         
         return state, key
+
+    def physics_step(self, state, action: jax.Array):
+        """
+        Advances the simulation by one environment step using the provided action.
+
+        Applies the action to the robot, performs the specified number of physics steps,
+        and updates the simulation state. Joint velocities are clipped to their maximum allowed values.
+        Returns the updated simulation state.
+
+        Args:
+            state (State): Current simulation state.
+            action (jax.Array): Action to apply to the robot.
+
+        Returns:
+            State: Updated simulation state after applying the action.
+        """
+        def do_single_step(data_step: mjx.Data, x) -> mjx.Data:
+            # Perform a single step in the environment
+            data_step = data_step.replace(ctrl=action)
+            data_step = mjx.step(state.model, data_step)
+            return data_step, None
+
+        data_new, _ = jax.lax.scan(
+            do_single_step,
+            state.pipeline_state,
+            None,
+            length=self.physics_steps_per_env_step,
+        )
+        data_new = data_new.replace(
+            qvel=data_new.qvel.at[self.robot.joint_qvel_adr].set(
+                jnp.clip(
+                    data_new.qvel[self.robot.joint_qvel_adr],
+                    -self.robot.max_joint_velocities,
+                    self.robot.max_joint_velocities,
+                )
+            )
+        )
+
+        state = state.replace(pipeline_state=data_new)
+
+        return state

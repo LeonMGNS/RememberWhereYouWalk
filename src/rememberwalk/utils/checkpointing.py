@@ -1,32 +1,14 @@
-
+"""Restoring, locating and exporting orbax checkpoints."""
 import os
-import numpy as np
-import orbax.checkpoint as ocp
-from rememberwalk.utils.paths import ROOT_DIR, CKPT_DIR
-import jax
-from flax.training import orbax_utils
-from flax import serialization
-from mujoco import mjx
-import mujoco
 import time
 
+import jax
+import orbax.checkpoint as ocp
+from flax import serialization
+from flax.training import orbax_utils
 
-def render(eval_state,visualizer_config,env,renderer):
-        data = mjx.get_data(env.model, eval_state.pipeline_state)
-        # 1. Convert JAX array to NumPy and flatten it
-        hfield_np = np.array(eval_state.model.hfield_data).flatten()
+from rememberwalk.utils.paths import CKPT_DIR
 
-        # 2. Copy data IN-PLACE into the existing model buffer
-        # This ensures the memory address remains the same for the renderer
-        env.model.hfield_data[:] = hfield_np
-
-        # 3. Explicitly upload to the renderer's GPU context
-        mujoco.mjr_uploadHField(env.model, renderer._mjr_context, 0)
-
-        # 4. Standard render sequence
-        mujoco.mj_camlight(env.model, data)
-        renderer.update_scene(data, 0)
-        return renderer.render()
 
 def restore_ckpt(ckpt_dir, actor_critic, visualizer_config, put_cpu=True,new_keys_to_ignore=[]):
     # Get the state dictionary of your NEW structure 
@@ -86,46 +68,6 @@ def restore_ckpt(ckpt_dir, actor_critic, visualizer_config, put_cpu=True,new_key
 def to_cpu(tree):
         return jax.tree_util.tree_map(lambda x: jax.device_put(x, jax.devices("cpu")[0]) if isinstance(x, jax.Array) else x, tree)
 
-# Directory settings
-dir_path = str(ROOT_DIR)
-ckpt_dir = f"{CKPT_DIR}/"
-save_ckpt_dir = f"{dir_path}/converged_checkpoints"
-
-# Wandb config filter
-
-allowed_types = (int, float, str, bool)
-
-def filter_nested(obj):
-    # Keep simple values
-    if isinstance(obj, allowed_types):
-        return obj
-
-    # Recurse into dictionaries
-    if isinstance(obj, dict):
-        return {
-            k: v_filtered
-            for k, v in obj.items()
-            if (v_filtered := filter_nested(v)) is not None
-        }
-
-    # Recurse into lists/tuples
-    if isinstance(obj, (list, tuple)):
-        result = [filter_nested(item) for item in obj]
-        return [item for item in result if item is not None]
-
-    # Everything else is removed
-    return None
-
-
-
-def generate_unique_path(dir_path, run):
-    run = run.replace("/", "_")
-    base_path = f"{dir_path}/videos/{run}"
-    extension = ".mp4"
-    output_path = f"{base_path}{extension}"
-    return output_path
-
-
 
 def get_dir_and_run_for_checkpointing():
     # Base checkpoints directory
@@ -166,14 +108,6 @@ def get_dir_and_run_for_checkpointing():
     full_path.mkdir(parents=True, exist_ok=True)
     
     return str(full_path), run_identifier
-
-class EmptyLogger:
-
-    def __init__(self):
-        pass
-        
-    def log(self,metrics,step):
-        return
 
 
 def extract_and_save_actor(full_state, export_dir):

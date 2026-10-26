@@ -1,6 +1,6 @@
 """The trained paper checkpoints still load and the restored policies behave as recorded.
 
-Skipped when checkpoints/experiment_checkpoints is not present (e.g. on the cluster).
+Skipped when checkpoints/experiment_checkpoints_old is not present (e.g. on the cluster).
 """
 import jax
 import pytest
