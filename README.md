@@ -1,6 +1,9 @@
-# Remember Where You Walk
+# Remember Where You Walk: Learning Spatial Memory for End-to-End Legged Robot Exploration
 
-Code to reproduce the results of the paper: train the policies, evaluate them and create the figures.
+**Project website:** https://leonmgns.github.io/RememberWhereYouWalkWebiste/
+
+This repository provides the code for the paper presented on the website. It contains everything needed to
+train the policies, evaluate them and create the figures of the paper.
 
 ## Setup
 
