@@ -75,6 +75,7 @@ def plot_exploration_bars_pooled(
                           # sqrt(n) and is nearly invisible at n ~ 3000
     annotate=True,
     wrap=13,
+    min_slots=4,          # fewer bars keep the bar width of the 4-approach figure
 ):
     """One bar per approach over the POOLED envs.
 
@@ -92,6 +93,8 @@ def plot_exploration_bars_pooled(
         fig.get_layout_engine().set(w_pad=0.01, h_pad=0.01)
 
         xs = np.arange(len(names))
+        # absolute bar width of the min_slots-bar figure; the bars still spread over the full width
+        bar_width = bar_width * len(names) / max(len(names), min_slots)
         for a, (name, pct) in enumerate(runs.items()):
             pct = np.asarray(pct, float)
             mean = float(pct.mean())
@@ -108,10 +111,13 @@ def plot_exploration_bars_pooled(
                         ha="center", va="bottom", fontsize=FS_SCRIPT, zorder=4)
 
         ax.set_xticks(xs)
-        if len(names) > 4:
+        ax.set_xticklabels([textwrap.fill(n, wrap) if len(names) >= 4 else n for n in names])
+        # Long single-word labels cannot wrap: tilt all labels once two neighbours collide
+        fig.canvas.draw()
+        boxes = [t.get_window_extent() for t in ax.get_xticklabels()]
+        if any(b0.x1 + 2 > b1.x0 for b0, b1 in zip(boxes, boxes[1:])):
             ax.set_xticklabels(names, rotation=30, ha="right", rotation_mode="anchor")
-        else:
-            ax.set_xticklabels([textwrap.fill(n, wrap) for n in names])
+            fig.set_size_inches(fig.get_size_inches() + [0, 0.25])   # room for the tilted labels
         ax.tick_params(axis="x", length=0)
         ax.set_ylim(*ylim)
         ax.yaxis.set_major_locator(MultipleLocator(25))
@@ -129,22 +135,24 @@ def plot_exploration_bars_pooled(
     return out_path
 
 
-def make_exploration_figure(suite, out_path):
+def make_exploration_figure(suite, out_path, approaches=None, labels=None):
+    approaches = approaches or suite.approaches
+    labels = labels or [a.name for a in approaches]
     # Reduce each run to (n_envs,) immediately; the big array never outlives
     # the loop iteration that loaded it.
     runs = {}
-    for approach in suite.approaches:
-        runs[approach.name] = []
+    for approach, display in zip(approaches, labels):
+        runs[display] = []
         for i in range(len(approach.runs)):
             label = f"{approach.name} run {i + 1}"
             ep, cv = load_exploration_data(suite.data_dir(approach, i))
             # full_episodes_only=False: include early-terminated envs. Their
             # percentage is read at their own final step (cumulative counts), so a
             # run that died at t=500 contributes what it actually explored.
-            runs[approach.name].append(percent_explored(ep, cv, full_episodes_only=False, label=label))
+            runs[display].append(percent_explored(ep, cv, full_episodes_only=False, label=label))
             n_full = int((np.asarray(ep) == cv.shape[0]).sum())
             print(f"   {label}: all {cv.shape[1]} envs included ({n_full} ran the full episode)")
             del cv
 
-    plot_exploration_bars_pooled(runs, out_path, colors=[a.color_unit for a in suite.approaches])
+    plot_exploration_bars_pooled(runs, out_path, colors=[a.color_unit for a in approaches])
     print(f"wrote {out_path}")

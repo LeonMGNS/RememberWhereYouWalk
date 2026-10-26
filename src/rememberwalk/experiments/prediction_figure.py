@@ -151,8 +151,8 @@ def render_panel(model, renderer, painter, hfield_flat, wall_rgb,
     return renderer.render()
 
 
-def make_prediction_figure(suite, out_path, seed=0):
-    approaches = suite.approaches
+def make_prediction_figure(suite, out_path, seed=0, approaches=None):
+    approaches = approaches or suite.approaches
     names = [a.name for a in approaches]
 
     # ---- data -------------------------------------------------------------
@@ -177,8 +177,8 @@ def make_prediction_figure(suite, out_path, seed=0):
         return (pred_probs(name, t) > WALL_THRESHOLD).astype(float)
 
     # ---- environment: built ONCE with the true maze -----------------------
-    # The maze geometry is the same for every approach, so the first one's config is used
-    first = approaches[0]
+    # The maze geometry is the same for every approach, so the first one with checkpoints is used
+    first = next(a for a in suite.approaches if not a.imported)
     config = experiment_config(suite, first, first.runs[first.showcase_run], nr_envs=1)
     setup = generate_setup(config)
     env_setup = setup["env"]

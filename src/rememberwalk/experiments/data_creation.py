@@ -56,6 +56,14 @@ def _created_from(out_dir):
 def create_data(suite: Suite, force: bool = False):
     for approach in suite.approaches:
         print(f"=== Data creation: {approach.name} ({len(approach.runs)} runs)")
+        if approach.imported:
+            # No checkpoints to roll out: the data was copied in, it only has to be there
+            for i in range(len(approach.runs)):
+                out_file = suite.data_dir(approach, i) / "eval_data.pkl"
+                if not out_file.is_file():
+                    raise FileNotFoundError(f"'{approach.name}' is imported, but {out_file} is missing")
+                print(f"   run {i + 1}: imported {out_file}")
+            continue
         environment, setup, env_state, env_keys, built_for = None, None, None, None, None
         for i, run_path in enumerate(approach.runs):
             out_dir = suite.data_dir(approach, i)
